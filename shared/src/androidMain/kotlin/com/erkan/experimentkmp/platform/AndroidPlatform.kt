@@ -1,4 +1,4 @@
-package com.erkan.experimentkmp
+package com.erkan.experimentkmp.platform
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${android.os.Build.VERSION.SDK_INT}"
