@@ -7,11 +7,17 @@ import kotlinx.serialization.Serializable
 data class PostDto(
     val id: Long,
     val title: String,
-    val body: String,
+    val description: String,
+    val price: Double,
+    val category: String,
+    val thumbnail: String,
 ) {
     fun toDomain(): Post = Post(
         id = id,
         title = title,
-        body = body,
+        body = description,
+        price = price,
+        category = category,
+        imageUrl = thumbnail,
     )
 }

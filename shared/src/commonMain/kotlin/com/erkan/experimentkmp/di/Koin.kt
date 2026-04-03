@@ -11,9 +11,12 @@ import com.erkan.experimentkmp.domain.usecase.AddNoteUseCase
 import com.erkan.experimentkmp.domain.usecase.GetNotesUseCase
 import com.erkan.experimentkmp.domain.usecase.GetPostsUseCase
 import com.erkan.experimentkmp.domain.usecase.ToggleNoteCompletionUseCase
+import com.erkan.experimentkmp.logging.AppLogger
+import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.createPlatformHttpClient
 import com.erkan.experimentkmp.platform.Platform
 import com.erkan.experimentkmp.platform.getPlatform
+import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
 import com.erkan.experimentkmp.presentation.notes.NotesStateHolder
 import com.erkan.experimentkmp.presentation.posts.PostsStateHolder
 import io.ktor.client.HttpClient
@@ -30,7 +33,8 @@ fun sharedModule(
     platformProvider: () -> Platform = ::getPlatform,
 ): Module = module {
     single<Platform> { platformProvider() }
-    single<HttpClient> { createPlatformHttpClient() }
+    single<AppLogger> { InMemoryAppLogger() }
+    single<HttpClient> { createPlatformHttpClient(get()) }
     single {
         Json {
             ignoreUnknownKeys = true
@@ -45,6 +49,7 @@ fun sharedModule(
     single { GetNotesUseCase(get()) }
     single { AddNoteUseCase(get()) }
     single { ToggleNoteCompletionUseCase(get()) }
+    single { LogsStateHolder(get()) }
     single { PostsStateHolder(get()) }
     single { NotesStateHolder(get(), get(), get()) }
 }
@@ -70,4 +75,5 @@ class SharedAppGraph private constructor(
 
     fun postsStateHolder(): PostsStateHolder = koin.get()
     fun notesStateHolder(): NotesStateHolder = koin.get()
+    fun logsStateHolder(): LogsStateHolder = koin.get()
 }
