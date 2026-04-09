@@ -5,5 +5,5 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 
 actual fun createPlatformHttpClient(appLogger: AppLogger): HttpClient = HttpClient(OkHttp) {
-    configureSharedHttpClient(engineName = "okhttp", appLogger = appLogger)
+    configureSharedHttpClient(appLogger = appLogger)
 }
