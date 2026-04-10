@@ -32,8 +32,10 @@ class AddExpenseEntryUseCase(
             ExpenseEntryType.EXPENSE -> category.trim()
         }
 
-        require(resolvedCategory in repository.getAvailableCategories().map { it.name }) {
-            "Choose a category."
+        if (type == ExpenseEntryType.EXPENSE) {
+            require(resolvedCategory in repository.getAvailableCategories().map { it.name }) {
+                "Choose a category."
+            }
         }
 
         repository.addEntry(

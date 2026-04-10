@@ -18,6 +18,7 @@ import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
 import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
 import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.configureSharedHttpClient
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardIntent
 import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
 import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
 import io.ktor.client.HttpClient
@@ -39,12 +40,13 @@ class FeatureStateHolderTest {
         val repository = FakeExpensesRepository()
         val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
 
         assertEquals("${'$'}0.00", stateHolder.currentState.balanceLabel)
         assertEquals(ExpensePeriod.MONTH, stateHolder.currentState.selectedPeriod)
         assertEquals(5, stateHolder.currentState.availableCategories.size)
+        assertEquals("Food", stateHolder.currentState.entryDraft.selectedCategory)
         assertTrue(stateHolder.currentState.categories.isEmpty())
         assertTrue(stateHolder.currentState.recentTransactions.isEmpty())
         assertTrue(stateHolder.currentState.isEmpty)
@@ -55,21 +57,20 @@ class FeatureStateHolderTest {
         val repository = FakeExpensesRepository()
         val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
-        stateHolder.saveEntry(
-            title = "Whole Foods",
-            amountText = "84.60",
-            category = "Food",
-            note = "Fresh groceries",
-            isIncome = false,
-        )
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Whole Foods"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("84.60"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateNote("Fresh groceries"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SelectCategory("Food"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SubmitEntry)
         delay(10)
 
         assertEquals("-${'$'}84.60", stateHolder.currentState.recentTransactions.first().amountLabel)
         assertEquals("Whole Foods", stateHolder.currentState.recentTransactions.first().title)
         assertEquals(1, stateHolder.currentState.categories.size)
         assertEquals("${'$'}84.60", stateHolder.currentState.expenseLabel)
+        assertEquals("", stateHolder.currentState.entryDraft.title)
         assertTrue(!stateHolder.currentState.isEmpty)
     }
 
@@ -82,9 +83,9 @@ class FeatureStateHolderTest {
         )
         val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
-        stateHolder.selectPeriod(ExpensePeriod.YEAR)
+        stateHolder.onIntent(ExpenseDashboardIntent.SelectPeriod(ExpensePeriod.YEAR))
         delay(10)
 
         assertEquals(ExpensePeriod.YEAR, stateHolder.currentState.selectedPeriod)
@@ -93,7 +94,25 @@ class FeatureStateHolderTest {
     }
 
     @Test
-    fun deleteEntryRemovesTransactionAndUpdatesDashboard() = runTest {
+    fun incomeEntryIsAcceptedWithoutExpenseCategoryValidation() = runTest {
+        val repository = FakeExpensesRepository()
+        val stateHolder = stateHolder(repository, this)
+
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
+        delay(10)
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateEntryType(true))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Salary"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("500.00"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SubmitEntry)
+        delay(10)
+
+        assertEquals(1, stateHolder.currentState.recentTransactions.size)
+        assertTrue(stateHolder.currentState.recentTransactions.first().isIncome)
+        assertEquals("+${'$'}500.00", stateHolder.currentState.recentTransactions.first().amountLabel)
+    }
+
+    @Test
+    fun deleteEntryRemovesTransactionAndKeepsDraft() = runTest {
         val repository = FakeExpensesRepository()
         repository.addEntry(
             NewExpenseEntry("Coffee", 6.5, "Food", "", ExpenseEntryType.EXPENSE, 1)
@@ -103,15 +122,21 @@ class FeatureStateHolderTest {
         )
         val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Taxi"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("18.20"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateNote("Airport"))
         val idToDelete = stateHolder.currentState.recentTransactions.first { !it.isIncome }.id
-        stateHolder.deleteEntry(idToDelete)
+        stateHolder.onIntent(ExpenseDashboardIntent.DeleteEntry(idToDelete))
         delay(10)
 
         assertEquals(1, stateHolder.currentState.recentTransactions.size)
         assertEquals("+${'$'}500.00", stateHolder.currentState.recentTransactions.first().amountLabel)
         assertEquals("${'$'}0.00", stateHolder.currentState.expenseLabel)
+        assertEquals("Taxi", stateHolder.currentState.entryDraft.title)
+        assertEquals("18.20", stateHolder.currentState.entryDraft.amount)
+        assertEquals("Airport", stateHolder.currentState.entryDraft.note)
     }
 
     @Test

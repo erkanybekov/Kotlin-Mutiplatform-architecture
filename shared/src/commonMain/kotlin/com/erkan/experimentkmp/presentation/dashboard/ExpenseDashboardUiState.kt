@@ -10,7 +10,6 @@ import kotlin.math.roundToLong
 data class ExpenseDashboardUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
-    val saveSuccessCount: Int = 0,
     val balanceLabel: String = "${'$'}0.00",
     val incomeLabel: String = "${'$'}0.00",
     val expenseLabel: String = "${'$'}0.00",
@@ -18,11 +17,23 @@ data class ExpenseDashboardUiState(
     val selectedPeriod: ExpensePeriod = ExpensePeriod.MONTH,
     val selectedPeriodLabel: String = ExpensePeriod.MONTH.label,
     val availableCategories: List<CategoryOptionUi> = emptyList(),
+    val entryDraft: ExpenseEntryDraftUiState = ExpenseEntryDraftUiState(),
     val chartPoints: List<ChartPointUi> = emptyList(),
     val categories: List<CategoryBreakdownUi> = emptyList(),
     val recentTransactions: List<TransactionItemUi> = emptyList(),
     val isEmpty: Boolean = true,
     val errorMessage: String? = null,
+)
+
+data class ExpenseEntryDraftUiState(
+    val title: String = "",
+    val amount: String = "",
+    val note: String = "",
+    val isIncome: Boolean = false,
+    val selectedCategory: String = "",
+    val titleError: String? = null,
+    val amountError: String? = null,
+    val categoryError: String? = null,
 )
 
 data class SummaryCardUi(
@@ -64,12 +75,12 @@ data class TransactionItemUi(
 fun ExpenseDashboard.toUiState(
     transactions: List<ExpenseTransaction>,
     availableCategories: List<ExpenseCategoryOption>,
+    entryDraft: ExpenseEntryDraftUiState,
 ): ExpenseDashboardUiState {
     val summary = summary
     return ExpenseDashboardUiState(
         isLoading = false,
         isSaving = false,
-        saveSuccessCount = 0,
         balanceLabel = formatCurrency(summary.balance),
         incomeLabel = formatCurrency(summary.income),
         expenseLabel = formatCurrency(summary.expense),
@@ -82,6 +93,7 @@ fun ExpenseDashboard.toUiState(
                 accentHex = category.accentHex,
             )
         },
+        entryDraft = entryDraft,
         chartPoints = chartEntries.map { point ->
             ChartPointUi(
                 label = point.label,

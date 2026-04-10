@@ -17,11 +17,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,7 +37,9 @@ import com.erkan.experimentkmp.domain.model.ExpensePeriod
 import com.erkan.experimentkmp.presentation.dashboard.CategoryBreakdownUi
 import com.erkan.experimentkmp.presentation.dashboard.CategoryOptionUi
 import com.erkan.experimentkmp.presentation.dashboard.ChartPointUi
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardIntent
 import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardUiState
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseEntryDraftUiState
 import com.erkan.experimentkmp.presentation.dashboard.SummaryCardUi
 import com.erkan.experimentkmp.presentation.dashboard.TransactionItemUi
 
@@ -50,38 +47,8 @@ import com.erkan.experimentkmp.presentation.dashboard.TransactionItemUi
 @Composable
 fun ExpenseDashboardScreen(
     state: ExpenseDashboardUiState,
-    onPeriodSelected: (ExpensePeriod) -> Unit,
-    onSaveEntry: (String, String, String, String, Boolean) -> Unit,
-    onDeleteEntry: (Long) -> Unit,
+    onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
-    var title by rememberSaveable { mutableStateOf("") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    var isIncome by rememberSaveable { mutableStateOf(false) }
-    var selectedCategory by rememberSaveable { mutableStateOf("") }
-    var titleError by rememberSaveable { mutableStateOf<String?>(null) }
-    var amountError by rememberSaveable { mutableStateOf<String?>(null) }
-    var categoryError by rememberSaveable { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(state.availableCategories) {
-        if (selectedCategory.isBlank() && state.availableCategories.isNotEmpty()) {
-            selectedCategory = state.availableCategories.first().name
-        }
-    }
-
-    LaunchedEffect(state.saveSuccessCount) {
-        if (state.saveSuccessCount > 0) {
-            title = ""
-            amount = ""
-            note = ""
-            isIncome = false
-            selectedCategory = state.availableCategories.firstOrNull()?.name.orEmpty()
-            titleError = null
-            amountError = null
-            categoryError = null
-        }
-    }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -136,51 +103,10 @@ fun ExpenseDashboardScreen(
 
             item {
                 QuickEntrySection(
-                    title = title,
-                    amount = amount,
-                    note = note,
-                    isIncome = isIncome,
+                    draft = state.entryDraft,
                     availableCategories = state.availableCategories,
-                    selectedCategory = selectedCategory,
                     isSaving = state.isSaving,
-                    titleError = titleError,
-                    amountError = amountError,
-                    categoryError = categoryError,
-                    onTitleChange = {
-                        title = it
-                        titleError = validateTitle(it)
-                    },
-                    onAmountChange = {
-                        amount = it
-                        amountError = validateAmount(it)
-                    },
-                    onNoteChange = { note = it },
-                    onIncomeToggle = {
-                        isIncome = it
-                        categoryError = null
-                    },
-                    onCategorySelected = {
-                        selectedCategory = it
-                        categoryError = null
-                    },
-                    onSave = {
-                        titleError = validateTitle(title)
-                        amountError = validateAmount(amount)
-                        categoryError = validateCategory(
-                            isIncome = isIncome,
-                            selectedCategory = selectedCategory,
-                        )
-
-                        if (titleError == null && amountError == null && categoryError == null) {
-                            onSaveEntry(
-                                title,
-                                amount,
-                                if (isIncome) "" else selectedCategory,
-                                note,
-                                isIncome,
-                            )
-                        }
-                    },
+                    onIntent = onIntent,
                 )
             }
 
@@ -188,7 +114,7 @@ fun ExpenseDashboardScreen(
                 AnalyticsSection(
                     selectedPeriod = state.selectedPeriod,
                     chartPoints = state.chartPoints,
-                    onPeriodSelected = onPeriodSelected,
+                    onIntent = onIntent,
                 )
             }
 
@@ -199,7 +125,7 @@ fun ExpenseDashboardScreen(
             item {
                 TransactionsSection(
                     transactions = state.recentTransactions,
-                    onDeleteEntry = onDeleteEntry,
+                    onIntent = onIntent,
                 )
             }
         }
@@ -208,22 +134,10 @@ fun ExpenseDashboardScreen(
 
 @Composable
 private fun QuickEntrySection(
-    title: String,
-    amount: String,
-    note: String,
-    isIncome: Boolean,
+    draft: ExpenseEntryDraftUiState,
     availableCategories: List<CategoryOptionUi>,
-    selectedCategory: String,
     isSaving: Boolean,
-    titleError: String?,
-    amountError: String?,
-    categoryError: String?,
-    onTitleChange: (String) -> Unit,
-    onAmountChange: (String) -> Unit,
-    onNoteChange: (String) -> Unit,
-    onIncomeToggle: (Boolean) -> Unit,
-    onCategorySelected: (String) -> Unit,
-    onSave: () -> Unit,
+    onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Card(
         colors = CardDefaults.elevatedCardColors(
@@ -240,71 +154,56 @@ private fun QuickEntrySection(
             )
 
             ExpenseTypeSelector(
-                isIncome = isIncome,
-                onToggle = onIncomeToggle,
+                isIncome = draft.isIncome,
+                onToggle = { onIntent(ExpenseDashboardIntent.UpdateEntryType(it)) },
             )
 
             ExpenseInputField(
-                value = title,
-                onValueChange = onTitleChange,
+                value = draft.title,
+                onValueChange = { onIntent(ExpenseDashboardIntent.UpdateTitle(it)) },
                 label = "Title",
-                errorText = titleError,
+                errorText = draft.titleError,
             )
 
             ExpenseInputField(
-                value = amount,
-                onValueChange = onAmountChange,
+                value = draft.amount,
+                onValueChange = { onIntent(ExpenseDashboardIntent.UpdateAmount(it)) },
                 label = "Amount",
-                errorText = amountError,
+                errorText = draft.amountError,
             )
 
             ExpenseInputField(
-                value = note,
-                onValueChange = onNoteChange,
+                value = draft.note,
+                onValueChange = { onIntent(ExpenseDashboardIntent.UpdateNote(it)) },
                 label = "Note",
                 singleLine = false,
             )
 
-            if (!isIncome && availableCategories.isNotEmpty()) {
+            if (!draft.isIncome && availableCategories.isNotEmpty()) {
                 ExpenseCategoryDropdown(
                     categories = availableCategories,
-                    selectedCategory = selectedCategory,
-                    errorText = categoryError,
-                    onCategorySelected = onCategorySelected,
+                    selectedCategory = draft.selectedCategory,
+                    errorText = draft.categoryError,
+                    onCategorySelected = {
+                        onIntent(ExpenseDashboardIntent.SelectCategory(it))
+                    },
                 )
             }
 
             ExpensePrimaryButton(
-                title = if (isIncome) "Save income" else "Save expense",
+                title = if (draft.isIncome) "Save income" else "Save expense",
                 isLoading = isSaving,
-                onClick = onSave,
+                onClick = { onIntent(ExpenseDashboardIntent.SubmitEntry) },
             )
         }
     }
 }
 
-private fun validateTitle(value: String): String? =
-    if (value.trim().isEmpty()) "Title is required." else null
-
-private fun validateAmount(value: String): String? {
-    val amount = value.trim().replace(',', '.').toDoubleOrNull()
-    return when {
-        value.trim().isEmpty() -> "Amount is required."
-        amount == null || amount <= 0.0 -> "Enter a valid amount."
-        else -> null
-    }
-}
-
-private fun validateCategory(
-    isIncome: Boolean,
-    selectedCategory: String,
-): String? = if (!isIncome && selectedCategory.isBlank()) "Choose a category." else null
-
 @Composable
 private fun AnalyticsSection(
     selectedPeriod: ExpensePeriod,
     chartPoints: List<ChartPointUi>,
-    onPeriodSelected: (ExpensePeriod) -> Unit,
+    onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Card(
         colors = CardDefaults.elevatedCardColors(
@@ -321,7 +220,9 @@ private fun AnalyticsSection(
             )
             ExpensePeriodSelector(
                 selectedPeriod = selectedPeriod,
-                onPeriodSelected = onPeriodSelected,
+                onPeriodSelected = {
+                    onIntent(ExpenseDashboardIntent.SelectPeriod(it))
+                },
             )
             if (chartPoints.any { it.amount > 0.0 }) {
                 ExpenseLineChart(points = chartPoints)
@@ -360,7 +261,7 @@ private fun CategoriesSection(
 @Composable
 private fun TransactionsSection(
     transactions: List<TransactionItemUi>,
-    onDeleteEntry: (Long) -> Unit,
+    onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ExpenseSectionHeader(
@@ -376,7 +277,9 @@ private fun TransactionsSection(
             transactions.forEach { transaction ->
                 ExpenseTransactionRow(
                     transaction = transaction,
-                    onDelete = { onDeleteEntry(transaction.id) },
+                    onDelete = {
+                        onIntent(ExpenseDashboardIntent.DeleteEntry(transaction.id))
+                    },
                 )
             }
         }
@@ -401,6 +304,12 @@ private fun ExpenseDashboardPreview() {
                     CategoryOptionUi("Shopping", "#FFBE4D"),
                     CategoryOptionUi("Transport", "#47D1B0"),
                 ),
+                entryDraft = ExpenseEntryDraftUiState(
+                    title = "Whole Foods",
+                    amount = "84.60",
+                    note = "Fresh groceries",
+                    selectedCategory = "Food",
+                ),
                 chartPoints = listOf(
                     ChartPointUi("Mon", 210.0),
                     ChartPointUi("Tue", 380.0),
@@ -420,9 +329,7 @@ private fun ExpenseDashboardPreview() {
                 ),
                 isEmpty = false,
             ),
-            onPeriodSelected = {},
-            onSaveEntry = { _, _, _, _, _ -> },
-            onDeleteEntry = {},
+            onIntent = {},
         )
     }
 }

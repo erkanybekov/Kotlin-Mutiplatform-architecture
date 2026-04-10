@@ -2,24 +2,18 @@ import SwiftUI
 import shared
 
 struct ExpenseDashboardView: View {
-    @StateObject private var dashboardState: ExpenseDashboardObservableState
-    @State private var title = ""
-    @State private var amount = ""
-    @State private var note = ""
-    @State private var isIncome = false
-    @State private var selectedCategory = ""
-    @State private var titleError: String?
-    @State private var amountError: String?
-    @State private var categoryError: String?
+    @StateObject private var viewModel: ExpenseDashboardViewModel
 
     init(appGraph: SharedAppGraph) {
-        _dashboardState = StateObject(wrappedValue: ExpenseDashboardObservableState(appGraph: appGraph))
+        _viewModel = StateObject(wrappedValue: ExpenseDashboardViewModel(appGraph: appGraph))
     }
 
     var body: some View {
+        let viewState = viewModel.viewState
+
         NavigationStack {
             List {
-                if let error = dashboardState.errorMessage {
+                if let error = viewState.errorMessage {
                     Section {
                         Text(error)
                             .font(.subheadline)
@@ -29,8 +23,8 @@ struct ExpenseDashboardView: View {
 
                 Section {
                     ExpenseBalanceCard(
-                        balanceLabel: dashboardState.balanceLabel,
-                        summaryCards: dashboardState.summaryCards
+                        balanceLabel: viewState.balanceLabel,
+                        summaryCards: viewState.summaryCards
                     )
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -42,57 +36,54 @@ struct ExpenseDashboardView: View {
                         supportingText: "Add income or an expense to the local database."
                     )
 
-                    Picker("Type", selection: $isIncome) {
-                        Text("Expense").tag(false)
-                        Text("Income").tag(true)
+                    Picker("Type", selection: entryTypeBinding(viewState)) {
+                        ForEach(ExpenseEntryKind.allCases) { kind in
+                            Text(kind.rawValue).tag(kind)
+                        }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: isIncome) { _ in
-                        categoryError = nil
-                    }
 
-                    TextField("Title", text: $title)
+                    TextField("Title", text: textBinding(viewState.draft.title, intent: ExpenseDashboardViewIntent.titleChanged))
                         .textInputAutocapitalization(.words)
-                    if let titleError {
+                    if let titleError = viewState.draft.titleError {
                         ExpenseValidationMessage(text: titleError)
                     }
 
-                    TextField("Amount", text: $amount)
+                    TextField("Amount", text: textBinding(viewState.draft.amount, intent: ExpenseDashboardViewIntent.amountChanged))
                         .keyboardType(.decimalPad)
-                    if let amountError {
+                    if let amountError = viewState.draft.amountError {
                         ExpenseValidationMessage(text: amountError)
                     }
 
-                    TextField("Note", text: $note, axis: .vertical)
+                    TextField("Note", text: textBinding(viewState.draft.note, intent: ExpenseDashboardViewIntent.noteChanged), axis: .vertical)
                         .lineLimit(2...4)
 
-                    if !isIncome && !dashboardState.availableCategories.isEmpty {
-                        Picker("Category", selection: $selectedCategory) {
-                            ForEach(dashboardState.availableCategories) { category in
+                    if !viewState.draft.entryType.isIncome && !viewState.availableCategories.isEmpty {
+                        Picker("Category", selection: categoryBinding(viewState)) {
+                            ForEach(viewState.availableCategories) { category in
                                 Text(category.name).tag(category.name)
                             }
                         }
                         .pickerStyle(.menu)
-                        .onChange(of: selectedCategory) { _ in
-                            categoryError = nil
-                        }
 
-                        if let categoryError {
+                        if let categoryError = viewState.draft.categoryError {
                             ExpenseValidationMessage(text: categoryError)
                         }
                     }
 
-                    Button(action: saveEntry) {
-                        if dashboardState.isSaving {
+                    Button {
+                        viewModel.send(.submitEntry)
+                    } label: {
+                        if viewState.isSaving {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                         } else {
-                            Text(isIncome ? "Save income" : "Save expense")
+                            Text(viewState.draft.entryType == .income ? "Save income" : "Save expense")
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(dashboardState.isSaving)
+                    .disabled(viewState.isSaving)
                 }
 
                 Section {
@@ -101,18 +92,15 @@ struct ExpenseDashboardView: View {
                         supportingText: "Spending breakdown for the selected period."
                     )
 
-                    Picker("Period", selection: Binding(
-                        get: { dashboardState.selectedPeriodLabel },
-                        set: { dashboardState.selectPeriod($0) }
-                    )) {
-                        Text("Week").tag("Week")
-                        Text("Month").tag("Month")
-                        Text("Year").tag("Year")
+                    Picker("Period", selection: periodBinding(viewState)) {
+                        ForEach(ExpenseDashboardPeriod.allCases) { period in
+                            Text(period.rawValue).tag(period)
+                        }
                     }
                     .pickerStyle(.segmented)
 
-                    if dashboardState.chartPoints.contains(where: { $0.amount > 0 }) {
-                        ExpenseChartView(points: dashboardState.chartPoints)
+                    if viewState.chartPoints.contains(where: { $0.amount > 0 }) {
+                        ExpenseChartView(points: viewState.chartPoints)
                     } else {
                         ExpenseEmptyStateCard(
                             title: "No chart data yet",
@@ -122,30 +110,30 @@ struct ExpenseDashboardView: View {
                 }
 
                 Section("Categories") {
-                    if dashboardState.categories.isEmpty {
+                    if viewState.categories.isEmpty {
                         ExpenseEmptyStateCard(
                             title: "No expense categories yet",
                             message: "Category totals appear after you save expense entries."
                         )
                     } else {
-                        ForEach(dashboardState.categories) { category in
+                        ForEach(viewState.categories) { category in
                             ExpenseCategorySummaryRow(category: category)
                         }
                     }
                 }
 
                 Section("Recent Transactions") {
-                    if dashboardState.recentTransactions.isEmpty {
+                    if viewState.recentTransactions.isEmpty {
                         ExpenseEmptyStateCard(
                             title: "No entries yet",
                             message: "Your latest expenses and income will appear here after the first save."
                         )
                     } else {
-                        ForEach(dashboardState.recentTransactions) { transaction in
+                        ForEach(viewState.recentTransactions) { transaction in
                             ExpenseTransactionRow(transaction: transaction)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
-                                        dashboardState.deleteEntry(id: transaction.id)
+                                        viewModel.send(.deleteEntry(transaction.id))
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -159,81 +147,45 @@ struct ExpenseDashboardView: View {
             .navigationTitle("Expenses")
             .navigationBarTitleDisplayMode(.large)
         }
-        .onAppear {
-            dashboardState.load()
-            if selectedCategory.isEmpty {
-                selectedCategory = dashboardState.availableCategories.first?.name ?? ""
-            }
-        }
-        .onChange(of: dashboardState.availableCategories) { categories in
-            if selectedCategory.isEmpty {
-                selectedCategory = categories.first?.name ?? ""
-            }
-        }
-        .onChange(of: title) { value in
-            if titleError != nil {
-                titleError = validateTitle(value)
-            }
-        }
-        .onChange(of: amount) { value in
-            if amountError != nil {
-                amountError = validateAmount(value)
-            }
-        }
-        .onChange(of: dashboardState.saveSuccessCount) { saveSuccessCount in
-            if saveSuccessCount > 0 {
-                title = ""
-                amount = ""
-                note = ""
-                isIncome = false
-                selectedCategory = dashboardState.availableCategories.first?.name ?? ""
-                titleError = nil
-                amountError = nil
-                categoryError = nil
-            }
+        .task {
+            viewModel.send(.load)
         }
     }
 
-    private func saveEntry() {
-        titleError = validateTitle(title)
-        amountError = validateAmount(amount)
-        categoryError = validateCategory(
-            isIncome: isIncome,
-            selectedCategory: selectedCategory
+    private func textBinding(
+        _ value: String,
+        intent: @escaping (String) -> ExpenseDashboardViewIntent
+    ) -> Binding<String> {
+        Binding(
+            get: { value },
+            set: { viewModel.send(intent($0)) }
         )
-
-        if titleError == nil && amountError == nil && categoryError == nil {
-            dashboardState.saveEntry(
-                title: title,
-                amountText: amount,
-                category: isIncome ? "" : selectedCategory,
-                note: note,
-                isIncome: isIncome
-            )
-        }
     }
-}
 
-private func validateTitle(_ value: String) -> String? {
-    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Title is required." : nil
-}
-
-private func validateAmount(_ value: String) -> String? {
-    let normalized = value
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .replacingOccurrences(of: ",", with: ".")
-
-    guard !normalized.isEmpty else { return "Amount is required." }
-    guard let amount = Double(normalized), amount > 0 else { return "Enter a valid amount." }
-    return nil
-}
-
-private func validateCategory(
-    isIncome: Bool,
-    selectedCategory: String
-) -> String? {
-    if !isIncome && selectedCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        return "Choose a category."
+    private func entryTypeBinding(
+        _ viewState: ExpenseDashboardViewState
+    ) -> Binding<ExpenseEntryKind> {
+        Binding(
+            get: { viewState.draft.entryType },
+            set: { viewModel.send(.entryTypeChanged($0)) }
+        )
     }
-    return nil
+
+    private func categoryBinding(
+        _ viewState: ExpenseDashboardViewState
+    ) -> Binding<String> {
+        Binding(
+            get: { viewState.draft.selectedCategory },
+            set: { viewModel.send(.categorySelected($0)) }
+        )
+    }
+
+    private func periodBinding(
+        _ viewState: ExpenseDashboardViewState
+    ) -> Binding<ExpenseDashboardPeriod> {
+        Binding(
+            get: { viewState.selectedPeriod },
+            set: { viewModel.send(.periodSelected($0)) }
+        )
+    }
 }
