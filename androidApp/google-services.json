@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1017915349470:android:a9c36600cbb189f1d4654f",
+        "mobilesdk_app_id": "1:1017915349470:android:6099e7c2cb368965d4654f",
         "android_client_info": {
-          "package_name": "com.erkan.experimentkmp"
+          "package_name": "com.erkan.experimentkmp.android"
         }
       },
       "oauth_client": [],

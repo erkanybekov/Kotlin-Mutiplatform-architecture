@@ -8,4 +8,6 @@ plugins {
     alias(libs.plugins.kotlinxSerialization) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.androidx.room) apply false
+    alias(libs.plugins.googleServices) apply false
+    alias(libs.plugins.firebaseAppDistribution) apply false
 }
