@@ -320,6 +320,22 @@ jobs:
           name: ${{ needs.prepare.outputs.distribution_artifact_name }}
           path: distribution-artifact
 
+      - name: Resolve Firebase App ID
+        shell: bash
+        run: |
+          firebase_app_id="$(
+            ruby -rjson -e '
+              json = JSON.parse(File.read("androidApp/google-services.json"))
+              client = json.fetch("client").find do |entry|
+                entry.dig("client_info", "android_client_info", "package_name") == "com.erkan.experimentkmp.android"
+              end
+              abort("No matching Firebase client for com.erkan.experimentkmp.android") unless client
+              puts client.fetch("client_info").fetch("mobilesdk_app_id")
+            '
+          )"
+
+          echo "FIREBASE_APP_ID=$firebase_app_id" >> "$GITHUB_ENV"
+
       - name: Resolve downloaded artifact
         id: downloaded-artifact
         shell: bash
