@@ -1,14 +1,62 @@
-# Firebase App Distribution via GitHub Actions
+# Android CI and Firebase App Distribution
 
-This project is configured to upload Android builds to Firebase App Distribution from GitHub Actions.
+This project now uses a staged GitHub Actions pipeline for Android verification and Firebase App Distribution.
 
-## What was added
+## Pipeline stages
 
-- Firebase App Distribution Gradle plugin in `androidApp`
-- `debug` and `release` upload tasks:
-  - `appDistributionUploadDebug`
-  - `appDistributionUploadRelease`
-- GitHub Actions workflow at `.github/workflows/firebase-app-distribution.yml`
+1. `prepare`
+   Resolves the build variant, artifact type, Gradle tasks, and artifact names.
+2. `verify-android`
+   Runs unit tests, lint, and the Android build.
+3. `distribute-android`
+   Runs only after successful verification, downloads the built artifact, and uploads it to Firebase App Distribution.
+
+## Best-practice choices in this pipeline
+
+- Uses the Firebase App Distribution Gradle plugin, which Firebase recommends for Android CI/CD.
+- Uses a service account instead of legacy `FIREBASE_TOKEN`.
+- Uses `google-github-actions/auth` to create and clean up temporary credentials during the distribution job.
+- Verifies code before distribution instead of building and uploading in one opaque step.
+- Uploads verification reports and the built distribution artifact as workflow artifacts.
+- Limits automatic push-based distributions to Android and Gradle-related file changes.
+- Runs verification on pull requests, but skips Firebase distribution there.
+
+## Workflow behavior
+
+- `pull_request`
+  Runs Android verification only.
+- `push` to `master-multiplatform`
+  Runs verification, then distributes a `debug` APK to Firebase App Distribution.
+- `workflow_dispatch`
+  Lets you choose:
+  - `debug` or `release`
+  - `APK` or `AAB`
+
+## Verification tasks
+
+The verification job runs variant-specific tasks:
+
+- `:shared:test<Variant>UnitTest`
+- `:androidApp:test<Variant>UnitTest`
+- `:shared:lint<Variant>`
+- `:androidApp:lint<Variant>`
+- `assemble<Variant>` or `bundle<Variant>`
+
+For the current project:
+
+- `shared` unit tests are active.
+- `androidApp` unit tests currently resolve to `NO-SOURCE`, which is valid until app-level tests are added.
+
+## Distribution flow
+
+The distribution job does not rebuild the app.
+
+It:
+
+1. Downloads the artifact produced by `verify-android`
+2. Authenticates with Google Cloud using the Firebase service account
+3. Generates release notes from the GitHub run metadata and latest commit message
+4. Uploads the already-built APK or AAB to Firebase App Distribution
 
 ## Required GitHub Secrets
 
@@ -21,41 +69,67 @@ Required for Firebase authentication:
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`
 
-Optional for `release` distribution:
+Optional for `release` verification and distribution:
 
 - `ANDROID_RELEASE_KEYSTORE_BASE64`
 - `ANDROID_RELEASE_KEYSTORE_PASSWORD`
 - `ANDROID_RELEASE_KEY_ALIAS`
 - `ANDROID_RELEASE_KEY_PASSWORD`
 
-## Recommended setup
+## Current minimal setup for this repository
 
-1. Create a Firebase service account with permission to distribute builds in App Distribution.
-2. Save the full JSON key as the `FIREBASE_SERVICE_ACCOUNT_JSON` GitHub Secret.
-3. Create a tester group in Firebase App Distribution and put its alias into `FIREBASE_APP_DIST_GROUPS`.
+For your current use case, only these secrets are required:
 
-## Workflow behavior
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
+- `FIREBASE_APP_DIST_TESTERS`
 
-- Push to `master-multiplatform` uploads a `debug` APK to Firebase App Distribution.
-- Manual `workflow_dispatch` lets you choose:
-  - `debug` or `release`
-  - `APK` or `AAB`
+Example value:
+
+```text
+kanybekov668@gmail.com
+```
+
+## Artifacts produced by the workflow
+
+- Distribution package:
+  - `android-debug-apk`
+  - `android-debug-aab`
+  - `android-release-apk`
+  - `android-release-aab`
+- Verification reports:
+  - `android-verification-reports-debug`
+  - `android-verification-reports-release`
+
+## Notes for KMP
+
+This workflow is intentionally Android-focused because Firebase App Distribution is part of the Android delivery path.
+
+It does not run iOS simulator tests on GitHub-hosted Ubuntu runners. If you want full KMP coverage, add a separate macOS workflow for:
+
+- `:shared:iosSimulatorArm64Test`
+  or
+- `:shared:iosX64Test`
 
 ## Local commands
 
-Debug APK:
+Debug verification and build:
 
 ```bash
-./gradlew assembleDebug appDistributionUploadDebug
+./gradlew \
+  :shared:testDebugUnitTest \
+  :androidApp:testDebugUnitTest \
+  :shared:lintDebug \
+  :androidApp:lintDebug \
+  :androidApp:assembleDebug
 ```
 
-Release APK:
+Debug distribution:
 
 ```bash
-./gradlew assembleRelease appDistributionUploadRelease
+./gradlew :androidApp:appDistributionUploadDebug
 ```
 
-If you run locally, export the same environment variables used by the workflow:
+If you run local distribution, export the same environment variables used by CI:
 
 - `GOOGLE_APPLICATION_CREDENTIALS`
 - `FIREBASE_APP_DIST_GROUPS` or `FIREBASE_APP_DIST_TESTERS`

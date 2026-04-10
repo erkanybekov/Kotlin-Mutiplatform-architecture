@@ -11,4 +11,5 @@ xcuserdata
 *.jks
 *.keystore
 firebase-service-account.json
+gha-creds-*.json
 .kotlin/sessions/*.salive

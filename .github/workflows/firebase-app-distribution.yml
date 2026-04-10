@@ -1,13 +1,34 @@
-name: Android Firebase App Distribution
+name: Android CI and Firebase App Distribution
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/firebase-app-distribution.yml
+      - androidApp/**
+      - shared/**
+      - gradle/**
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
   push:
     branches:
       - master-multiplatform
+    paths:
+      - .github/workflows/firebase-app-distribution.yml
+      - androidApp/**
+      - shared/**
+      - gradle/**
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
   workflow_dispatch:
     inputs:
       build_variant:
-        description: Build variant to distribute
+        description: Build variant to verify and distribute
         required: true
         default: debug
         type: choice
@@ -15,7 +36,7 @@ on:
           - debug
           - release
       artifact_type:
-        description: Android artifact to upload to Firebase
+        description: Android artifact to build and upload
         required: true
         default: APK
         type: choice
@@ -27,24 +48,81 @@ permissions:
   contents: read
 
 concurrency:
-  group: firebase-app-distribution-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.build_variant || 'debug' }}
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.build_variant || 'debug' }}
   cancel-in-progress: true
 
 jobs:
-  distribute-android:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    outputs:
+      build_variant: ${{ steps.config.outputs.build_variant }}
+      variant_cap: ${{ steps.config.outputs.variant_cap }}
+      artifact_type: ${{ steps.config.outputs.artifact_type }}
+      build_task: ${{ steps.config.outputs.build_task }}
+      upload_task: ${{ steps.config.outputs.upload_task }}
+      artifact_glob: ${{ steps.config.outputs.artifact_glob }}
+      distribution_artifact_name: ${{ steps.config.outputs.distribution_artifact_name }}
+      reports_artifact_name: ${{ steps.config.outputs.reports_artifact_name }}
+      shared_unit_test_task: ${{ steps.config.outputs.shared_unit_test_task }}
+      app_unit_test_task: ${{ steps.config.outputs.app_unit_test_task }}
+      shared_lint_task: ${{ steps.config.outputs.shared_lint_task }}
+      app_lint_task: ${{ steps.config.outputs.app_lint_task }}
+    steps:
+      - name: Resolve pipeline configuration
+        id: config
+        shell: bash
+        run: |
+          build_variant="${{ github.event_name == 'workflow_dispatch' && inputs.build_variant || 'debug' }}"
+          artifact_type="${{ github.event_name == 'workflow_dispatch' && inputs.artifact_type || 'APK' }}"
+          variant_cap="${build_variant^}"
+          artifact_type_upper="${artifact_type^^}"
+          artifact_type_lower="${artifact_type,,}"
+
+          if [ "$artifact_type_upper" = "AAB" ]; then
+            build_task="bundle${variant_cap}"
+            artifact_glob="androidApp/build/outputs/bundle/${build_variant}/*.aab"
+          else
+            build_task="assemble${variant_cap}"
+            artifact_glob="androidApp/build/outputs/apk/${build_variant}/*.apk"
+          fi
+
+          echo "build_variant=$build_variant" >> "$GITHUB_OUTPUT"
+          echo "variant_cap=$variant_cap" >> "$GITHUB_OUTPUT"
+          echo "artifact_type=$artifact_type_upper" >> "$GITHUB_OUTPUT"
+          echo "build_task=$build_task" >> "$GITHUB_OUTPUT"
+          echo "upload_task=appDistributionUpload${variant_cap}" >> "$GITHUB_OUTPUT"
+          echo "artifact_glob=$artifact_glob" >> "$GITHUB_OUTPUT"
+          echo "distribution_artifact_name=android-${build_variant}-${artifact_type_lower}" >> "$GITHUB_OUTPUT"
+          echo "reports_artifact_name=android-verification-reports-${build_variant}" >> "$GITHUB_OUTPUT"
+          echo "shared_unit_test_task=:shared:test${variant_cap}UnitTest" >> "$GITHUB_OUTPUT"
+          echo "app_unit_test_task=:androidApp:test${variant_cap}UnitTest" >> "$GITHUB_OUTPUT"
+          echo "shared_lint_task=:shared:lint${variant_cap}" >> "$GITHUB_OUTPUT"
+          echo "app_lint_task=:androidApp:lint${variant_cap}" >> "$GITHUB_OUTPUT"
+
+  verify-android:
+    name: Verify Android
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
     env:
-      BUILD_VARIANT: ${{ github.event_name == 'workflow_dispatch' && inputs.build_variant || 'debug' }}
-      FIREBASE_APP_DIST_ARTIFACT_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.artifact_type || 'APK' }}
-      FIREBASE_APP_DIST_GROUPS: ${{ secrets.FIREBASE_APP_DIST_GROUPS }}
-      FIREBASE_APP_DIST_TESTERS: ${{ secrets.FIREBASE_APP_DIST_TESTERS }}
+      BUILD_VARIANT: ${{ needs.prepare.outputs.build_variant }}
+      BUILD_TASK: ${{ needs.prepare.outputs.build_task }}
+      SHARED_UNIT_TEST_TASK: ${{ needs.prepare.outputs.shared_unit_test_task }}
+      APP_UNIT_TEST_TASK: ${{ needs.prepare.outputs.app_unit_test_task }}
+      SHARED_LINT_TASK: ${{ needs.prepare.outputs.shared_lint_task }}
+      APP_LINT_TASK: ${{ needs.prepare.outputs.app_lint_task }}
+      ARTIFACT_GLOB: ${{ needs.prepare.outputs.artifact_glob }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -55,26 +133,6 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Prepare Firebase service account
-        env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
-            echo "FIREBASE_SERVICE_ACCOUNT_JSON secret is required." >&2
-            exit 1
-          fi
-
-          credentials_path="$RUNNER_TEMP/firebase-service-account.json"
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$credentials_path"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$credentials_path" >> "$GITHUB_ENV"
-
-      - name: Validate tester target
-        run: |
-          if [ -z "$FIREBASE_APP_DIST_GROUPS" ] && [ -z "$FIREBASE_APP_DIST_TESTERS" ]; then
-            echo "Set FIREBASE_APP_DIST_GROUPS or FIREBASE_APP_DIST_TESTERS in GitHub Secrets." >&2
-            exit 1
-          fi
-
       - name: Prepare release signing
         if: env.BUILD_VARIANT == 'release'
         env:
@@ -84,7 +142,7 @@ jobs:
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_RELEASE_KEYSTORE_BASE64" ] || [ -z "$ANDROID_RELEASE_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_RELEASE_KEY_ALIAS" ] || [ -z "$ANDROID_RELEASE_KEY_PASSWORD" ]; then
-            echo "Release distribution requires all ANDROID_RELEASE_* secrets." >&2
+            echo "Release verification requires all ANDROID_RELEASE_* secrets." >&2
             exit 1
           fi
 
@@ -95,6 +153,121 @@ jobs:
           echo "ANDROID_RELEASE_KEYSTORE_PASSWORD=$ANDROID_RELEASE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ANDROID_RELEASE_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "ANDROID_RELEASE_KEY_PASSWORD=$ANDROID_RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Run unit tests, lint, and build
+        run: |
+          ./gradlew \
+            "$SHARED_UNIT_TEST_TASK" \
+            "$APP_UNIT_TEST_TASK" \
+            "$SHARED_LINT_TASK" \
+            "$APP_LINT_TASK" \
+            "$BUILD_TASK"
+
+      - name: Resolve built artifact
+        id: artifact
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=( $ARTIFACT_GLOB )
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one distribution artifact, found ${#files[@]}." >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+
+          echo "path=${files[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.reports_artifact_name }}
+          path: |
+            androidApp/build/reports/**
+            shared/build/reports/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload distribution artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.distribution_artifact_name }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  distribute-android:
+    name: Distribute to Firebase
+    needs:
+      - prepare
+      - verify-android
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      BUILD_VARIANT: ${{ needs.prepare.outputs.build_variant }}
+      VARIANT_CAP: ${{ needs.prepare.outputs.variant_cap }}
+      FIREBASE_APP_DIST_ARTIFACT_TYPE: ${{ needs.prepare.outputs.artifact_type }}
+      FIREBASE_APP_DIST_GROUPS: ${{ secrets.FIREBASE_APP_DIST_GROUPS }}
+      FIREBASE_APP_DIST_TESTERS: ${{ secrets.FIREBASE_APP_DIST_TESTERS }}
+      UPLOAD_TASK: ${{ needs.prepare.outputs.upload_task }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+          request_reason: GitHubActions:${{ github.repository }}:${{ github.workflow }}:${{ github.run_id }}
+
+      - name: Validate tester target
+        run: |
+          if [ -z "$FIREBASE_APP_DIST_GROUPS" ] && [ -z "$FIREBASE_APP_DIST_TESTERS" ]; then
+            echo "Set FIREBASE_APP_DIST_GROUPS or FIREBASE_APP_DIST_TESTERS in GitHub Secrets." >&2
+            exit 1
+          fi
+
+      - name: Download built artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.distribution_artifact_name }}
+          path: distribution-artifact
+
+      - name: Resolve downloaded artifact
+        id: downloaded-artifact
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=( distribution-artifact/* )
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one downloaded artifact, found ${#files[@]}." >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+
+          echo "path=${files[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Create Firebase release notes
         run: |
@@ -112,13 +285,10 @@ jobs:
 
           echo "FIREBASE_APP_DIST_RELEASE_NOTES_FILE=$notes_path" >> "$GITHUB_ENV"
 
-      - name: Build and distribute
+      - name: Upload to Firebase App Distribution
         run: |
-          variant_cap="${BUILD_VARIANT^}"
-          if [ "$FIREBASE_APP_DIST_ARTIFACT_TYPE" = "AAB" ]; then
-            build_task="bundle${variant_cap}"
-          else
-            build_task="assemble${variant_cap}"
-          fi
-
-          ./gradlew "$build_task" "appDistributionUpload${variant_cap}"
+          ./gradlew \
+            "$UPLOAD_TASK" \
+            "--artifactType=$FIREBASE_APP_DIST_ARTIFACT_TYPE" \
+            "--artifactPath=${{ steps.downloaded-artifact.outputs.path }}" \
+            "--releaseNotesFile=$FIREBASE_APP_DIST_RELEASE_NOTES_FILE"
