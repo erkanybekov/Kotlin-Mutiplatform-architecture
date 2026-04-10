@@ -71,7 +71,9 @@ fun ExpenseDashboardScreen(
         },
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(ExpenseDashboardTestTags.ContentList),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
