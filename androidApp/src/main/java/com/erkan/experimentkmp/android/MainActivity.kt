@@ -47,5 +47,6 @@ private fun ExpenseDashboardRoute(
         state = state,
         onPeriodSelected = stateHolder::selectPeriod,
         onSaveEntry = stateHolder::saveEntry,
+        onDeleteEntry = stateHolder::deleteEntry,
     )
 }

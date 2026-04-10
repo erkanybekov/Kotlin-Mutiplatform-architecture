@@ -8,66 +8,157 @@ struct ExpenseDashboardView: View {
     @State private var note = ""
     @State private var isIncome = false
     @State private var selectedCategory = ""
-    @State private var wasSaving = false
+    @State private var titleError: String?
+    @State private var amountError: String?
+    @State private var categoryError: String?
 
     init(appGraph: SharedAppGraph) {
         _dashboardState = StateObject(wrappedValue: ExpenseDashboardObservableState(appGraph: appGraph))
     }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [ExpensePalette.background, ExpensePalette.backgroundTop, ExpensePalette.backgroundBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            ExpenseGlow(color: ExpensePalette.accentWarm)
-                .offset(x: 170, y: -290)
-
-            ExpenseGlow(color: ExpensePalette.accentIndigo)
-                .offset(x: -180, y: 100)
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
-                    HeaderSection()
-
-                    if let error = dashboardState.errorMessage {
+        NavigationStack {
+            List {
+                if let error = dashboardState.errorMessage {
+                    Section {
                         Text(error)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(ExpensePalette.error)
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
                     }
+                }
 
-                    ExpenseHeroCard(
+                Section {
+                    ExpenseBalanceCard(
                         balanceLabel: dashboardState.balanceLabel,
                         summaryCards: dashboardState.summaryCards
                     )
-
-                    QuickEntrySection(
-                        state: dashboardState,
-                        title: $title,
-                        amount: $amount,
-                        note: $note,
-                        isIncome: $isIncome,
-                        selectedCategory: $selectedCategory
-                    )
-
-                    ExpensePeriodSwitcher(
-                        selectedPeriodLabel: dashboardState.selectedPeriodLabel,
-                        onSelect: dashboardState.selectPeriod
-                    )
-
-                    AnalyticsSection(points: dashboardState.chartPoints)
-                    CategoriesSection(categories: dashboardState.categories)
-                    TransactionsSection(transactions: dashboardState.recentTransactions)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 12)
-                .padding(.bottom, 36)
+
+                Section {
+                    ExpenseSectionHeader(
+                        title: "New entry",
+                        supportingText: "Add income or an expense to the local database."
+                    )
+
+                    Picker("Type", selection: $isIncome) {
+                        Text("Expense").tag(false)
+                        Text("Income").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: isIncome) { _ in
+                        categoryError = nil
+                    }
+
+                    TextField("Title", text: $title)
+                        .textInputAutocapitalization(.words)
+                    if let titleError {
+                        ExpenseValidationMessage(text: titleError)
+                    }
+
+                    TextField("Amount", text: $amount)
+                        .keyboardType(.decimalPad)
+                    if let amountError {
+                        ExpenseValidationMessage(text: amountError)
+                    }
+
+                    TextField("Note", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+
+                    if !isIncome && !dashboardState.availableCategories.isEmpty {
+                        Picker("Category", selection: $selectedCategory) {
+                            ForEach(dashboardState.availableCategories) { category in
+                                Text(category.name).tag(category.name)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: selectedCategory) { _ in
+                            categoryError = nil
+                        }
+
+                        if let categoryError {
+                            ExpenseValidationMessage(text: categoryError)
+                        }
+                    }
+
+                    Button(action: saveEntry) {
+                        if dashboardState.isSaving {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text(isIncome ? "Save income" : "Save expense")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(dashboardState.isSaving)
+                }
+
+                Section {
+                    ExpenseSectionHeader(
+                        title: "Analytics",
+                        supportingText: "Spending breakdown for the selected period."
+                    )
+
+                    Picker("Period", selection: Binding(
+                        get: { dashboardState.selectedPeriodLabel },
+                        set: { dashboardState.selectPeriod($0) }
+                    )) {
+                        Text("Week").tag("Week")
+                        Text("Month").tag("Month")
+                        Text("Year").tag("Year")
+                    }
+                    .pickerStyle(.segmented)
+
+                    if dashboardState.chartPoints.contains(where: { $0.amount > 0 }) {
+                        ExpenseChartView(points: dashboardState.chartPoints)
+                    } else {
+                        ExpenseEmptyStateCard(
+                            title: "No chart data yet",
+                            message: "Add a few expenses and the chart will start reflecting them."
+                        )
+                    }
+                }
+
+                Section("Categories") {
+                    if dashboardState.categories.isEmpty {
+                        ExpenseEmptyStateCard(
+                            title: "No expense categories yet",
+                            message: "Category totals appear after you save expense entries."
+                        )
+                    } else {
+                        ForEach(dashboardState.categories) { category in
+                            ExpenseCategorySummaryRow(category: category)
+                        }
+                    }
+                }
+
+                Section("Recent Transactions") {
+                    if dashboardState.recentTransactions.isEmpty {
+                        ExpenseEmptyStateCard(
+                            title: "No entries yet",
+                            message: "Your latest expenses and income will appear here after the first save."
+                        )
+                    } else {
+                        ForEach(dashboardState.recentTransactions) { transaction in
+                            ExpenseTransactionRow(transaction: transaction)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        dashboardState.deleteEntry(id: transaction.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                }
             }
+            .scrollContentBackground(.hidden)
+            .background(ExpensePalette.background)
+            .navigationTitle("Expenses")
+            .navigationBarTitleDisplayMode(.large)
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             dashboardState.load()
             if selectedCategory.isEmpty {
@@ -79,167 +170,70 @@ struct ExpenseDashboardView: View {
                 selectedCategory = categories.first?.name ?? ""
             }
         }
-        .onChange(of: dashboardState.isSaving) { isSaving in
-            if wasSaving && !isSaving && dashboardState.errorMessage == nil {
+        .onChange(of: title) { value in
+            if titleError != nil {
+                titleError = validateTitle(value)
+            }
+        }
+        .onChange(of: amount) { value in
+            if amountError != nil {
+                amountError = validateAmount(value)
+            }
+        }
+        .onChange(of: dashboardState.saveSuccessCount) { saveSuccessCount in
+            if saveSuccessCount > 0 {
                 title = ""
                 amount = ""
                 note = ""
                 isIncome = false
                 selectedCategory = dashboardState.availableCategories.first?.name ?? ""
+                titleError = nil
+                amountError = nil
+                categoryError = nil
             }
-            wasSaving = isSaving
         }
     }
-}
 
-private struct HeaderSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Personal ledger")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(ExpensePalette.textSecondary)
+    private func saveEntry() {
+        titleError = validateTitle(title)
+        amountError = validateAmount(amount)
+        categoryError = validateCategory(
+            isIncome: isIncome,
+            selectedCategory: selectedCategory
+        )
 
-            Text("Expense Flow")
-                .font(.system(size: 34, weight: .black))
-                .foregroundStyle(ExpensePalette.textPrimary)
-
-            Text("Track real entries locally. No seeded data, no sync required.")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(ExpensePalette.textMuted)
-        }
-    }
-}
-
-private struct QuickEntrySection: View {
-    @ObservedObject var state: ExpenseDashboardObservableState
-    @Binding var title: String
-    @Binding var amount: String
-    @Binding var note: String
-    @Binding var isIncome: Bool
-    @Binding var selectedCategory: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ExpenseSectionTitle(title: "New entry")
-
-            Text("Save an expense or income directly to your local database.")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(ExpensePalette.textMuted)
-
-            ExpenseTypeSwitcher(
-                isIncome: isIncome,
-                onSelect: { isIncome = $0 }
-            )
-
-            ExpenseTextField(title: "Title", text: $title)
-            ExpenseTextField(title: "Amount", text: $amount)
-            ExpenseTextField(title: "Note (optional)", text: $note, axis: .vertical)
-
-            if !isIncome && !state.availableCategories.isEmpty {
-                ExpenseCategorySelector(
-                    categories: state.availableCategories,
-                    selectedCategory: selectedCategory,
-                    onSelect: { selectedCategory = $0 }
-                )
-            }
-
-            ExpensePrimaryButton(
-                title: isIncome ? "Save income" : "Save expense",
-                isLoading: state.isSaving,
-                action: {
-                    state.saveEntry(
-                        title: title,
-                        amountText: amount,
-                        category: isIncome ? "" : selectedCategory,
-                        note: note,
-                        isIncome: isIncome
-                    )
-                }
+        if titleError == nil && amountError == nil && categoryError == nil {
+            dashboardState.saveEntry(
+                title: title,
+                amountText: amount,
+                category: isIncome ? "" : selectedCategory,
+                note: note,
+                isIncome: isIncome
             )
         }
-        .padding(20)
-        .background(ExpensePalette.surfaceStrong, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
     }
 }
 
-private struct AnalyticsSection: View {
-    let points: [ChartPointModel]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ExpenseSectionTitle(title: "Analytics")
-
-                    Text("Spending over the selected period")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Color.expense(hex: "#7382A3"))
-                }
-
-                Spacer()
-            }
-
-            if points.contains(where: { $0.amount > 0 }) {
-                ExpenseChartView(points: points)
-            } else {
-                ExpenseEmptyCard(
-                    title: "No chart data yet",
-                    message: "Add a few expenses and this section will show your spending pattern."
-                )
-            }
-        }
-        .padding(20)
-        .background(ExpensePalette.surfaceStrong, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-    }
+private func validateTitle(_ value: String) -> String? {
+    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Title is required." : nil
 }
 
-private struct CategoriesSection: View {
-    let categories: [CategoryCardModel]
+private func validateAmount(_ value: String) -> String? {
+    let normalized = value
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: ",", with: ".")
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ExpenseSectionTitle(title: "Categories")
-
-            if categories.isEmpty {
-                ExpenseEmptyCard(
-                    title: "No expense categories yet",
-                    message: "Category totals appear after you save expense entries."
-                )
-            } else {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(categories) { category in
-                        ExpenseCategoryCard(category: category)
-                    }
-                }
-            }
-        }
-    }
+    guard !normalized.isEmpty else { return "Amount is required." }
+    guard let amount = Double(normalized), amount > 0 else { return "Enter a valid amount." }
+    return nil
 }
 
-private struct TransactionsSection: View {
-    let transactions: [TransactionRowModel]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ExpenseSectionTitle(title: "Recent transactions")
-
-            if transactions.isEmpty {
-                ExpenseEmptyCard(
-                    title: "No entries yet",
-                    message: "Your latest expenses and income will appear here after the first save."
-                )
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(transactions) { transaction in
-                        ExpenseTransactionCard(transaction: transaction)
-                    }
-                }
-            }
-        }
+private func validateCategory(
+    isIncome: Bool,
+    selectedCategory: String
+) -> String? {
+    if !isIncome && selectedCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return "Choose a category."
     }
+    return nil
 }

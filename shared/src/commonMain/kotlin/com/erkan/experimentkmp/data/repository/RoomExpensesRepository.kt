@@ -70,6 +70,10 @@ class RoomExpensesRepository(
         )
     }
 
+    override suspend fun deleteEntry(id: Long) {
+        expenseDao.deleteById(id)
+    }
+
     override fun getAvailableCategories(): List<ExpenseCategoryOption> =
         ExpenseCategoryCatalog.allSelectable()
 

@@ -45,6 +45,7 @@ struct TransactionRowModel: Identifiable, Equatable {
 final class ExpenseDashboardObservableState: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false
+    @Published private(set) var saveSuccessCount = 0
     @Published private(set) var balanceLabel = "$0.00"
     @Published private(set) var incomeLabel = "$0.00"
     @Published private(set) var expenseLabel = "$0.00"
@@ -101,6 +102,10 @@ final class ExpenseDashboardObservableState: ObservableObject {
         )
     }
 
+    func deleteEntry(id: Int64) {
+        stateHolder.deleteEntry(id: id)
+    }
+
     deinit {
         observationHandle?.dispose()
     }
@@ -108,6 +113,7 @@ final class ExpenseDashboardObservableState: ObservableObject {
     private func sync(with state: ExpenseDashboardUiState) {
         isLoading = state.isLoading
         isSaving = state.isSaving
+        saveSuccessCount = Int(state.saveSuccessCount)
         balanceLabel = state.balanceLabel
         incomeLabel = state.incomeLabel
         expenseLabel = state.expenseLabel

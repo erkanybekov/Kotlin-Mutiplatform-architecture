@@ -25,13 +25,21 @@ fun ExpenseLineChart(
     points: List<ChartPointUi>,
 ) {
     if (points.isEmpty()) {
-        Text("No chart data yet.", color = Color(0xFF7382A3))
+        Text(
+            text = "No chart data yet.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         return
     }
 
-    val lineColor = Color(0xFFFFA65B)
+    val lineColor = MaterialTheme.colorScheme.primary
+    val markerSurfaceColor = MaterialTheme.colorScheme.surface
     val fillBrush = Brush.verticalGradient(
-        colors = listOf(Color(0x66FFA65B), Color(0x11FFA65B), Color.Transparent),
+        colors = listOf(
+            lineColor.copy(alpha = 0.32f),
+            lineColor.copy(alpha = 0.08f),
+            Color.Transparent,
+        ),
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -84,7 +92,7 @@ fun ExpenseLineChart(
                 val normalized = ((point.amount - minValue) / verticalRange).toFloat()
                 val y = topPadding + graphHeight - (normalized * graphHeight)
 
-                drawCircle(color = Color(0xFF0D1325), radius = 11f, center = Offset(x, y))
+                drawCircle(color = markerSurfaceColor, radius = 11f, center = Offset(x, y))
                 drawCircle(color = lineColor, radius = 6f, center = Offset(x, y))
             }
         }
@@ -97,7 +105,7 @@ fun ExpenseLineChart(
                 Text(
                     text = point.label,
                     style = MaterialTheme.typography.bodySmall,
-                    color = ExpensePalette.TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

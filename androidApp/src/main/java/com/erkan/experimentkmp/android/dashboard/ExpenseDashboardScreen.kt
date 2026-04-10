@@ -1,49 +1,43 @@
 package com.erkan.experimentkmp.android.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.erkan.experimentkmp.android.MyApplicationTheme
-import com.erkan.experimentkmp.android.uikit.ExpenseBackgroundBrush
-import com.erkan.experimentkmp.android.uikit.ExpenseCategoryCard
-import com.erkan.experimentkmp.android.uikit.ExpenseCategorySelector
-import com.erkan.experimentkmp.android.uikit.ExpenseEmptyCard
-import com.erkan.experimentkmp.android.uikit.ExpenseGlow
-import com.erkan.experimentkmp.android.uikit.ExpenseHeroCard
+import com.erkan.experimentkmp.android.uikit.ExpenseBalanceCard
+import com.erkan.experimentkmp.android.uikit.ExpenseCategoryDropdown
+import com.erkan.experimentkmp.android.uikit.ExpenseCategorySummaryCard
+import com.erkan.experimentkmp.android.uikit.ExpenseEmptyStateCard
 import com.erkan.experimentkmp.android.uikit.ExpenseInputField
 import com.erkan.experimentkmp.android.uikit.ExpenseLineChart
-import com.erkan.experimentkmp.android.uikit.ExpensePalette
-import com.erkan.experimentkmp.android.uikit.ExpensePeriodSwitcher
+import com.erkan.experimentkmp.android.uikit.ExpensePeriodSelector
 import com.erkan.experimentkmp.android.uikit.ExpensePrimaryButton
-import com.erkan.experimentkmp.android.uikit.ExpenseSectionTitle
-import com.erkan.experimentkmp.android.uikit.ExpenseTransactionCard
-import com.erkan.experimentkmp.android.uikit.ExpenseTypeSwitcher
+import com.erkan.experimentkmp.android.uikit.ExpenseSectionHeader
+import com.erkan.experimentkmp.android.uikit.ExpenseTransactionRow
+import com.erkan.experimentkmp.android.uikit.ExpenseTypeSelector
 import com.erkan.experimentkmp.domain.model.ExpensePeriod
 import com.erkan.experimentkmp.presentation.dashboard.CategoryBreakdownUi
 import com.erkan.experimentkmp.presentation.dashboard.CategoryOptionUi
@@ -52,18 +46,22 @@ import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardUiState
 import com.erkan.experimentkmp.presentation.dashboard.SummaryCardUi
 import com.erkan.experimentkmp.presentation.dashboard.TransactionItemUi
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseDashboardScreen(
     state: ExpenseDashboardUiState,
     onPeriodSelected: (ExpensePeriod) -> Unit,
     onSaveEntry: (String, String, String, String, Boolean) -> Unit,
+    onDeleteEntry: (Long) -> Unit,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
     var isIncome by rememberSaveable { mutableStateOf(false) }
     var selectedCategory by rememberSaveable { mutableStateOf("") }
-    var wasSaving by remember { mutableStateOf(false) }
+    var titleError by rememberSaveable { mutableStateOf<String?>(null) }
+    var amountError by rememberSaveable { mutableStateOf<String?>(null) }
+    var categoryError by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.availableCategories) {
         if (selectedCategory.isBlank() && state.availableCategories.isNotEmpty()) {
@@ -71,74 +69,109 @@ fun ExpenseDashboardScreen(
         }
     }
 
-    LaunchedEffect(state.isSaving, state.errorMessage, state.recentTransactions.size) {
-        if (wasSaving && !state.isSaving && state.errorMessage == null) {
+    LaunchedEffect(state.saveSuccessCount) {
+        if (state.saveSuccessCount > 0) {
             title = ""
             amount = ""
             note = ""
             isIncome = false
             selectedCategory = state.availableCategories.firstOrNull()?.name.orEmpty()
+            titleError = null
+            amountError = null
+            categoryError = null
         }
-        wasSaving = state.isSaving
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ExpenseBackgroundBrush),
-    ) {
-        ExpenseGlow(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 96.dp, y = (-52).dp),
-            color = ExpensePalette.AccentWarm,
-        )
-        ExpenseGlow(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = (-110).dp, y = 120.dp),
-            color = ExpensePalette.AccentIndigo,
-        )
-
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("Expenses")
+                        Text(
+                            text = "Stored locally on this device",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = WindowInsets.statusBars.asPaddingValues(),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = innerPadding.calculateTopPadding() + 8.dp,
+                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                ) {
-                    DashboardHeader()
+                ExpenseBalanceCard(
+                    balanceLabel = state.balanceLabel,
+                    summaryCards = state.summaryCards,
+                )
+            }
 
-                    state.errorMessage?.let { error ->
+            state.errorMessage?.let { error ->
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
+                    ) {
                         Text(
                             text = error,
-                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
+                }
+            }
 
-                    ExpenseHeroCard(
-                        balanceLabel = state.balanceLabel,
-                        summaryCards = state.summaryCards,
-                    )
+            item {
+                QuickEntrySection(
+                    title = title,
+                    amount = amount,
+                    note = note,
+                    isIncome = isIncome,
+                    availableCategories = state.availableCategories,
+                    selectedCategory = selectedCategory,
+                    isSaving = state.isSaving,
+                    titleError = titleError,
+                    amountError = amountError,
+                    categoryError = categoryError,
+                    onTitleChange = {
+                        title = it
+                        titleError = validateTitle(it)
+                    },
+                    onAmountChange = {
+                        amount = it
+                        amountError = validateAmount(it)
+                    },
+                    onNoteChange = { note = it },
+                    onIncomeToggle = {
+                        isIncome = it
+                        categoryError = null
+                    },
+                    onCategorySelected = {
+                        selectedCategory = it
+                        categoryError = null
+                    },
+                    onSave = {
+                        titleError = validateTitle(title)
+                        amountError = validateAmount(amount)
+                        categoryError = validateCategory(
+                            isIncome = isIncome,
+                            selectedCategory = selectedCategory,
+                        )
 
-                    QuickEntrySection(
-                        title = title,
-                        amount = amount,
-                        note = note,
-                        isIncome = isIncome,
-                        availableCategories = state.availableCategories,
-                        selectedCategory = selectedCategory,
-                        isSaving = state.isSaving,
-                        onTitleChange = { title = it },
-                        onAmountChange = { amount = it },
-                        onNoteChange = { note = it },
-                        onIncomeToggle = { isIncome = it },
-                        onCategorySelected = { selectedCategory = it },
-                        onSave = {
+                        if (titleError == null && amountError == null && categoryError == null) {
                             onSaveEntry(
                                 title,
                                 amount,
@@ -146,43 +179,30 @@ fun ExpenseDashboardScreen(
                                 note,
                                 isIncome,
                             )
-                        },
-                    )
+                        }
+                    },
+                )
+            }
 
-                    ExpensePeriodSwitcher(
-                        selectedPeriod = state.selectedPeriod,
-                        onPeriodSelected = onPeriodSelected,
-                    )
+            item {
+                AnalyticsSection(
+                    selectedPeriod = state.selectedPeriod,
+                    chartPoints = state.chartPoints,
+                    onPeriodSelected = onPeriodSelected,
+                )
+            }
 
-                    AnalyticsSection(chartPoints = state.chartPoints)
+            item {
+                CategoriesSection(categories = state.categories)
+            }
 
-                    CategoriesSection(categories = state.categories)
-
-                    TransactionsSection(transactions = state.recentTransactions)
-                }
+            item {
+                TransactionsSection(
+                    transactions = state.recentTransactions,
+                    onDeleteEntry = onDeleteEntry,
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun DashboardHeader() {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = "Personal ledger",
-            style = MaterialTheme.typography.labelLarge,
-            color = ExpensePalette.TextSecondary,
-        )
-        Text(
-            text = "Expense Flow",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-        )
-        Text(
-            text = "Track real entries locally. No seeded data, no sync required.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = ExpensePalette.TextMuted,
-        )
     }
 }
 
@@ -195,6 +215,9 @@ private fun QuickEntrySection(
     availableCategories: List<CategoryOptionUi>,
     selectedCategory: String,
     isSaving: Boolean,
+    titleError: String?,
+    amountError: String?,
+    categoryError: String?,
     onTitleChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
     onNoteChange: (String) -> Unit,
@@ -202,88 +225,112 @@ private fun QuickEntrySection(
     onCategorySelected: (String) -> Unit,
     onSave: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ExpensePalette.SurfaceStrong, shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    Card(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
     ) {
-        ExpenseSectionTitle("New entry")
-        Text(
-            text = "Save an expense or income directly to your local database.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = ExpensePalette.TextMuted,
-        )
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ExpenseSectionHeader(
+                title = "New entry",
+                supportingText = "Add income or an expense to the local database.",
+            )
 
-        ExpenseTypeSwitcher(
-            isIncome = isIncome,
-            onToggle = onIncomeToggle,
-        )
+            ExpenseTypeSelector(
+                isIncome = isIncome,
+                onToggle = onIncomeToggle,
+            )
 
-        ExpenseInputField(
-            value = title,
-            onValueChange = onTitleChange,
-            label = "Title",
-        )
+            ExpenseInputField(
+                value = title,
+                onValueChange = onTitleChange,
+                label = "Title",
+                errorText = titleError,
+            )
 
-        ExpenseInputField(
-            value = amount,
-            onValueChange = onAmountChange,
-            label = "Amount",
-        )
+            ExpenseInputField(
+                value = amount,
+                onValueChange = onAmountChange,
+                label = "Amount",
+                errorText = amountError,
+            )
 
-        ExpenseInputField(
-            value = note,
-            onValueChange = onNoteChange,
-            label = "Note (optional)",
-            singleLine = false,
-        )
+            ExpenseInputField(
+                value = note,
+                onValueChange = onNoteChange,
+                label = "Note",
+                singleLine = false,
+            )
 
-        if (!isIncome && availableCategories.isNotEmpty()) {
-            ExpenseCategorySelector(
-                categories = availableCategories,
-                selectedCategory = selectedCategory,
-                onCategorySelected = onCategorySelected,
+            if (!isIncome && availableCategories.isNotEmpty()) {
+                ExpenseCategoryDropdown(
+                    categories = availableCategories,
+                    selectedCategory = selectedCategory,
+                    errorText = categoryError,
+                    onCategorySelected = onCategorySelected,
+                )
+            }
+
+            ExpensePrimaryButton(
+                title = if (isIncome) "Save income" else "Save expense",
+                isLoading = isSaving,
+                onClick = onSave,
             )
         }
-
-        ExpensePrimaryButton(
-            title = if (isIncome) "Save income" else "Save expense",
-            isLoading = isSaving,
-            onClick = onSave,
-        )
     }
 }
 
+private fun validateTitle(value: String): String? =
+    if (value.trim().isEmpty()) "Title is required." else null
+
+private fun validateAmount(value: String): String? {
+    val amount = value.trim().replace(',', '.').toDoubleOrNull()
+    return when {
+        value.trim().isEmpty() -> "Amount is required."
+        amount == null || amount <= 0.0 -> "Enter a valid amount."
+        else -> null
+    }
+}
+
+private fun validateCategory(
+    isIncome: Boolean,
+    selectedCategory: String,
+): String? = if (!isIncome && selectedCategory.isBlank()) "Choose a category." else null
+
 @Composable
 private fun AnalyticsSection(
+    selectedPeriod: ExpensePeriod,
     chartPoints: List<ChartPointUi>,
+    onPeriodSelected: (ExpensePeriod) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ExpensePalette.SurfaceStrong, shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+    Card(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                ExpenseSectionTitle("Analytics")
-                Text("Spending over the selected period", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF7382A3))
-            }
-        }
-        if (chartPoints.any { it.amount > 0.0 }) {
-            ExpenseLineChart(points = chartPoints)
-        } else {
-            ExpenseEmptyCard(
-                title = "No chart data yet",
-                message = "Add a few expenses and this section will show your spending pattern.",
+            ExpenseSectionHeader(
+                title = "Analytics",
+                supportingText = "Spending breakdown for the selected period.",
             )
+            ExpensePeriodSelector(
+                selectedPeriod = selectedPeriod,
+                onPeriodSelected = onPeriodSelected,
+            )
+            if (chartPoints.any { it.amount > 0.0 }) {
+                ExpenseLineChart(points = chartPoints)
+            } else {
+                ExpenseEmptyStateCard(
+                    title = "No chart data yet",
+                    message = "Add a few expenses and the chart will start reflecting them.",
+                )
+            }
         }
     }
 }
@@ -292,26 +339,19 @@ private fun AnalyticsSection(
 private fun CategoriesSection(
     categories: List<CategoryBreakdownUi>,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        ExpenseSectionTitle("Categories")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ExpenseSectionHeader(
+            title = "Categories",
+            supportingText = "Totals are derived from saved expense entries.",
+        )
         if (categories.isEmpty()) {
-            ExpenseEmptyCard(
+            ExpenseEmptyStateCard(
                 title = "No expense categories yet",
                 message = "Category totals appear after you save expense entries.",
             )
         } else {
-            categories.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { category ->
-                        ExpenseCategoryCard(
-                            modifier = Modifier.weight(1f),
-                            category = category,
-                        )
-                    }
-                    if (row.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
+            categories.forEach { category ->
+                ExpenseCategorySummaryCard(category = category)
             }
         }
     }
@@ -320,19 +360,24 @@ private fun CategoriesSection(
 @Composable
 private fun TransactionsSection(
     transactions: List<TransactionItemUi>,
+    onDeleteEntry: (Long) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        ExpenseSectionTitle("Recent transactions")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ExpenseSectionHeader(
+            title = "Recent transactions",
+            supportingText = "Most recent entries are shown first.",
+        )
         if (transactions.isEmpty()) {
-            ExpenseEmptyCard(
+            ExpenseEmptyStateCard(
                 title = "No entries yet",
                 message = "Your latest expenses and income will appear here after the first save.",
             )
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                transactions.forEach { transaction ->
-                    ExpenseTransactionCard(transaction = transaction)
-                }
+            transactions.forEach { transaction ->
+                ExpenseTransactionRow(
+                    transaction = transaction,
+                    onDelete = { onDeleteEntry(transaction.id) },
+                )
             }
         }
     }
@@ -377,6 +422,7 @@ private fun ExpenseDashboardPreview() {
             ),
             onPeriodSelected = {},
             onSaveEntry = { _, _, _, _, _ -> },
+            onDeleteEntry = {},
         )
     }
 }

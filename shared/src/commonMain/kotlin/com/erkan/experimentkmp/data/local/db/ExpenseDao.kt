@@ -9,6 +9,9 @@ interface ExpenseDao {
     @Insert
     suspend fun insert(entry: ExpenseEntity)
 
+    @Query("DELETE FROM expense_entries WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Query("SELECT * FROM expense_entries ORDER BY createdAtEpochMillis DESC")
     suspend fun getAll(): List<ExpenseEntity>
 

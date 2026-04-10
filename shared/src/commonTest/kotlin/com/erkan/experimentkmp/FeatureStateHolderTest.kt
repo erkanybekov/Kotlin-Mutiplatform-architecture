@@ -12,6 +12,7 @@ import com.erkan.experimentkmp.domain.model.ExpenseTransaction
 import com.erkan.experimentkmp.domain.model.NewExpenseEntry
 import com.erkan.experimentkmp.domain.repository.ExpensesRepository
 import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.DeleteExpenseEntryUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseCategoriesUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
 import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
@@ -89,6 +90,28 @@ class FeatureStateHolderTest {
         assertEquals(ExpensePeriod.YEAR, stateHolder.currentState.selectedPeriod)
         assertEquals("Year", stateHolder.currentState.selectedPeriodLabel)
         assertEquals(12, stateHolder.currentState.chartPoints.size)
+    }
+
+    @Test
+    fun deleteEntryRemovesTransactionAndUpdatesDashboard() = runTest {
+        val repository = FakeExpensesRepository()
+        repository.addEntry(
+            NewExpenseEntry("Coffee", 6.5, "Food", "", ExpenseEntryType.EXPENSE, 1)
+        )
+        repository.addEntry(
+            NewExpenseEntry("Salary", 500.0, "Income", "", ExpenseEntryType.INCOME, 2)
+        )
+        val stateHolder = stateHolder(repository, this)
+
+        stateHolder.load()
+        delay(10)
+        val idToDelete = stateHolder.currentState.recentTransactions.first { !it.isIncome }.id
+        stateHolder.deleteEntry(idToDelete)
+        delay(10)
+
+        assertEquals(1, stateHolder.currentState.recentTransactions.size)
+        assertEquals("+${'$'}500.00", stateHolder.currentState.recentTransactions.first().amountLabel)
+        assertEquals("${'$'}0.00", stateHolder.currentState.expenseLabel)
     }
 
     @Test
@@ -184,6 +207,7 @@ class FeatureStateHolderTest {
             getRecentTransactionsUseCase = GetRecentTransactionsUseCase(repository),
             getExpenseCategoriesUseCase = GetExpenseCategoriesUseCase(repository),
             addExpenseEntryUseCase = AddExpenseEntryUseCase(repository),
+            deleteExpenseEntryUseCase = DeleteExpenseEntryUseCase(repository),
             scope = scope.backgroundScope,
         )
 }
@@ -260,6 +284,14 @@ private class FakeExpensesRepository(
 
     override suspend fun addEntry(entry: NewExpenseEntry) {
         entries += entry
+    }
+
+    override suspend fun deleteEntry(id: Long) {
+        if (id <= 0L) return
+        val index = entries.lastIndex - (id.toInt() - 1)
+        if (index in entries.indices) {
+            entries.removeAt(index)
+        }
     }
 
     override fun getAvailableCategories(): List<ExpenseCategoryOption> =

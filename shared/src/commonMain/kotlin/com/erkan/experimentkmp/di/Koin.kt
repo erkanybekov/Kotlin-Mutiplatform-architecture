@@ -4,6 +4,7 @@ import com.erkan.experimentkmp.data.local.db.expenseDatabaseModule
 import com.erkan.experimentkmp.data.repository.RoomExpensesRepository
 import com.erkan.experimentkmp.domain.repository.ExpensesRepository
 import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.DeleteExpenseEntryUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseCategoriesUseCase
 import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
@@ -36,8 +37,9 @@ fun sharedModules(
     single { GetExpenseCategoriesUseCase(get()) }
     single { GetRecentTransactionsUseCase(get()) }
     single { AddExpenseEntryUseCase(get()) }
+    single { DeleteExpenseEntryUseCase(get()) }
     single { LogsStateHolder(get()) }
-    single { ExpenseDashboardStateHolder(get(), get(), get(), get()) }
+    single { ExpenseDashboardStateHolder(get(), get(), get(), get(), get()) }
     },
     expenseDatabaseModule(storageDirectoryPath),
 )

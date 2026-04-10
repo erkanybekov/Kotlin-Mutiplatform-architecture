@@ -13,5 +13,7 @@ interface ExpensesRepository {
 
     suspend fun addEntry(entry: NewExpenseEntry)
 
+    suspend fun deleteEntry(id: Long)
+
     fun getAvailableCategories(): List<ExpenseCategoryOption>
 }

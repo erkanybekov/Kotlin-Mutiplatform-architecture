@@ -1,17 +1,16 @@
 import SwiftUI
+import UIKit
 
 enum ExpensePalette {
-    static let background = Color(hex: "#090E1A")
-    static let backgroundTop = Color(hex: "#10192E")
-    static let backgroundBottom = Color(hex: "#080C16")
-    static let surface = Color(hex: "#10192E")
-    static let surfaceMuted = Color(hex: "#11192D")
-    static let surfaceStrong = Color(hex: "#121A2D")
-    static let surfaceInset = Color(hex: "#0E1528")
-    static let surfaceChip = Color(hex: "#18223A")
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "#93A0BE")
-    static let textMuted = Color(hex: "#6F7C99")
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let surfaceMuted = Color(uiColor: .secondarySystemGroupedBackground)
+    static let surfaceStrong = Color(uiColor: .secondarySystemGroupedBackground)
+    static let surfaceInset = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let surfaceChip = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let textPrimary = Color.primary
+    static let textSecondary = Color.secondary
+    static let textMuted = Color(uiColor: .tertiaryLabel)
     static let accentWarm = Color(hex: "#FF8A5B")
     static let accentGold = Color(hex: "#FFBE4D")
     static let accentSuccess = Color(hex: "#2AD5A6")

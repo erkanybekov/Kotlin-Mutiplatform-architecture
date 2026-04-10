@@ -10,6 +10,7 @@ import kotlin.math.roundToLong
 data class ExpenseDashboardUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
+    val saveSuccessCount: Int = 0,
     val balanceLabel: String = "${'$'}0.00",
     val incomeLabel: String = "${'$'}0.00",
     val expenseLabel: String = "${'$'}0.00",
@@ -68,6 +69,7 @@ fun ExpenseDashboard.toUiState(
     return ExpenseDashboardUiState(
         isLoading = false,
         isSaving = false,
+        saveSuccessCount = 0,
         balanceLabel = formatCurrency(summary.balance),
         incomeLabel = formatCurrency(summary.income),
         expenseLabel = formatCurrency(summary.expense),

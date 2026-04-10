@@ -2,6 +2,7 @@ package com.erkan.experimentkmp.presentation.dashboard
 
 import com.erkan.experimentkmp.domain.model.ExpensePeriod
 import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.DeleteExpenseEntryUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseCategoriesUseCase
 import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
 import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
@@ -21,6 +22,7 @@ class ExpenseDashboardStateHolder(
     private val getRecentTransactionsUseCase: GetRecentTransactionsUseCase,
     private val getExpenseCategoriesUseCase: GetExpenseCategoriesUseCase,
     private val addExpenseEntryUseCase: AddExpenseEntryUseCase,
+    private val deleteExpenseEntryUseCase: DeleteExpenseEntryUseCase,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val _state = MutableStateFlow(
@@ -88,6 +90,7 @@ class ExpenseDashboardStateHolder(
                 hasLoaded = true
                 _state.value = dashboardState.copy(
                     isSaving = false,
+                    saveSuccessCount = state.value.saveSuccessCount + 1,
                     errorMessage = null,
                 )
             }.onFailure { error ->
@@ -102,6 +105,34 @@ class ExpenseDashboardStateHolder(
     fun clearError() {
         if (state.value.errorMessage == null) return
         _state.value = state.value.copy(errorMessage = null)
+    }
+
+    fun deleteEntry(id: Long) {
+        if (state.value.isSaving) return
+
+        scope.launch {
+            _state.value = state.value.copy(
+                isSaving = true,
+                errorMessage = null,
+            )
+
+            runCatching {
+                deleteExpenseEntryUseCase(id)
+                buildState(state.value.selectedPeriod)
+            }.onSuccess { dashboardState ->
+                hasLoaded = true
+                _state.value = dashboardState.copy(
+                    isSaving = false,
+                    saveSuccessCount = state.value.saveSuccessCount + 1,
+                    errorMessage = null,
+                )
+            }.onFailure { error ->
+                _state.value = state.value.copy(
+                    isSaving = false,
+                    errorMessage = error.message ?: "Could not delete entry.",
+                )
+            }
+        }
     }
 
     fun watch(block: (ExpenseDashboardUiState) -> Unit): ObservationHandle {
@@ -132,6 +163,7 @@ class ExpenseDashboardStateHolder(
                 _state.value = dashboardState.copy(
                     isLoading = false,
                     isSaving = false,
+                    saveSuccessCount = state.value.saveSuccessCount,
                 )
             }.onFailure { error ->
                 _state.value = state.value.copy(
