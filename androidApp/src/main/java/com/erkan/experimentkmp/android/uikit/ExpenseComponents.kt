@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -142,6 +143,7 @@ private fun ExpenseMetricCard(
 fun ExpensePeriodSelector(
     selectedPeriod: ExpensePeriod,
     onPeriodSelected: (ExpensePeriod) -> Unit,
+    chipModifierProvider: (ExpensePeriod) -> Modifier = { Modifier },
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -151,7 +153,7 @@ fun ExpensePeriodSelector(
             FilterChip(
                 selected = period == selectedPeriod,
                 onClick = { onPeriodSelected(period) },
-                modifier = Modifier.weight(1f),
+                modifier = chipModifierProvider(period).weight(1f),
                 label = {
                     Text(
                         text = period.label,
@@ -172,6 +174,8 @@ fun ExpensePeriodSelector(
 fun ExpenseTypeSelector(
     isIncome: Boolean,
     onToggle: (Boolean) -> Unit,
+    expenseChipModifier: Modifier = Modifier,
+    incomeChipModifier: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -180,7 +184,7 @@ fun ExpenseTypeSelector(
         FilterChip(
             selected = !isIncome,
             onClick = { onToggle(false) },
-            modifier = Modifier.weight(1f),
+            modifier = expenseChipModifier.weight(1f),
             label = { Text("Expense") },
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = expenseColorFromHex("#FF8A5B").copy(alpha = 0.18f),
@@ -190,7 +194,7 @@ fun ExpenseTypeSelector(
         FilterChip(
             selected = isIncome,
             onClick = { onToggle(true) },
-            modifier = Modifier.weight(1f),
+            modifier = incomeChipModifier.weight(1f),
             label = { Text("Income") },
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = expenseColorFromHex("#29D4A5").copy(alpha = 0.18f),
@@ -235,6 +239,7 @@ fun ExpenseCategoryDropdown(
     selectedCategory: String,
     errorText: String?,
     onCategorySelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -246,6 +251,7 @@ fun ExpenseCategoryDropdown(
             value = selectedCategory,
             onValueChange = {},
             modifier = Modifier
+                .then(modifier)
                 .fillMaxWidth()
                 .menuAnchor(),
             label = { Text("Category") },
@@ -285,11 +291,12 @@ fun ExpensePrimaryButton(
     title: String,
     isLoading: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Button(
         onClick = onClick,
         enabled = !isLoading,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp),
     ) {
@@ -312,9 +319,10 @@ fun ExpensePrimaryButton(
 fun ExpenseEmptyStateCard(
     title: String,
     message: String,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.outlinedCardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -387,10 +395,12 @@ fun ExpenseCategorySummaryCard(
 fun ExpenseTransactionRow(
     transaction: TransactionItemUi,
     onDelete: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    deleteButtonModifier: Modifier = Modifier,
 ) {
     val accent = expenseColorFromHex(transaction.accentHex)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -445,7 +455,10 @@ fun ExpenseTransactionRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (onDelete != null) {
-                    TextButton(onClick = onDelete) {
+                    TextButton(
+                        onClick = onDelete,
+                        modifier = deleteButtonModifier,
+                    ) {
                         Text("Delete")
                     }
                 }

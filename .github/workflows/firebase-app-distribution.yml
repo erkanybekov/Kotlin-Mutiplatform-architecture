@@ -63,6 +63,7 @@ jobs:
       artifact_glob: ${{ steps.config.outputs.artifact_glob }}
       distribution_artifact_name: ${{ steps.config.outputs.distribution_artifact_name }}
       reports_artifact_name: ${{ steps.config.outputs.reports_artifact_name }}
+      ui_reports_artifact_name: ${{ steps.config.outputs.ui_reports_artifact_name }}
       shared_unit_test_task: ${{ steps.config.outputs.shared_unit_test_task }}
       app_unit_test_task: ${{ steps.config.outputs.app_unit_test_task }}
       shared_lint_task: ${{ steps.config.outputs.shared_lint_task }}
@@ -94,6 +95,7 @@ jobs:
           echo "artifact_glob=$artifact_glob" >> "$GITHUB_OUTPUT"
           echo "distribution_artifact_name=android-${build_variant}-${artifact_type_lower}" >> "$GITHUB_OUTPUT"
           echo "reports_artifact_name=android-verification-reports-${build_variant}" >> "$GITHUB_OUTPUT"
+          echo "ui_reports_artifact_name=android-ui-test-reports-${build_variant}" >> "$GITHUB_OUTPUT"
           echo "shared_unit_test_task=:shared:test${variant_cap}UnitTest" >> "$GITHUB_OUTPUT"
           echo "app_unit_test_task=:androidApp:test${variant_cap}UnitTest" >> "$GITHUB_OUTPUT"
           echo "shared_lint_task=:shared:lint${variant_cap}" >> "$GITHUB_OUTPUT"
@@ -197,12 +199,75 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  ui-tests-android:
+    name: Android UI Tests
+    needs:
+      - prepare
+      - verify-android
+    if: needs.prepare.outputs.build_variant == 'debug'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run connected Debug Android tests
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: ./gradlew :androidApp:connectedDebugAndroidTest
+
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.ui_reports_artifact_name }}
+          path: |
+            androidApp/build/reports/androidTests/**
+            androidApp/build/outputs/androidTest-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
   distribute-android:
     name: Distribute to Firebase
     needs:
       - prepare
       - verify-android
-    if: github.event_name != 'pull_request'
+      - ui-tests-android
+    if: >-
+      github.event_name != 'pull_request' &&
+      needs.verify-android.result == 'success' &&
+      (
+        needs.prepare.outputs.build_variant != 'debug' ||
+        needs.ui-tests-android.result == 'success'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
