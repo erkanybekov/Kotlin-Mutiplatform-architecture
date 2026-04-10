@@ -8,3 +8,7 @@ captures
 .cxx
 local.properties
 xcuserdata
+*.jks
+*.keystore
+firebase-service-account.json
+.kotlin/sessions/*.salive

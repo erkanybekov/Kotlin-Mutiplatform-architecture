@@ -5,5 +5,5 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
 
 actual fun createPlatformHttpClient(appLogger: AppLogger): HttpClient = HttpClient(Darwin) {
-    configureSharedHttpClient(engineName = "darwin", appLogger = appLogger)
+    configureSharedHttpClient(appLogger = appLogger)
 }

@@ -1,9 +1,12 @@
+import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.googleServices)
+    alias(libs.plugins.firebaseAppDistribution)
 }
 
 kotlin {
@@ -12,9 +15,41 @@ kotlin {
     }
 }
 
+fun env(name: String): String? = providers.environmentVariable(name).orNull?.trim()?.takeIf { it.isNotEmpty() }
+
+val firebaseArtifactType = env("FIREBASE_APP_DIST_ARTIFACT_TYPE") ?: "APK"
+val firebaseTesters = env("FIREBASE_APP_DIST_TESTERS")
+val firebaseGroups = env("FIREBASE_APP_DIST_GROUPS")
+val firebaseReleaseNotes = env("FIREBASE_APP_DIST_RELEASE_NOTES")
+val firebaseReleaseNotesFile = env("FIREBASE_APP_DIST_RELEASE_NOTES_FILE")
+val firebaseCredentialsPath = env("GOOGLE_APPLICATION_CREDENTIALS")
+val firebaseAppId = env("FIREBASE_APP_ID")
+
+val releaseKeystorePath = env("ANDROID_RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword = env("ANDROID_RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = env("ANDROID_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = env("ANDROID_RELEASE_KEY_PASSWORD")
+
 android {
     namespace = "com.erkan.experimentkmp.android"
     compileSdk = 36
+
+    signingConfigs {
+        if (
+            releaseKeystorePath != null &&
+            releaseKeystorePassword != null &&
+            releaseKeyAlias != null &&
+            releaseKeyPassword != null
+        ) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.erkan.experimentkmp.android"
         minSdk = 24
@@ -31,8 +66,33 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            firebaseAppDistribution {
+                artifactType = firebaseArtifactType
+                firebaseTesters?.let { testers = it }
+                firebaseGroups?.let { groups = it }
+                firebaseReleaseNotesFile?.let { releaseNotesFile = it }
+                if (firebaseReleaseNotesFile == null) {
+                    firebaseReleaseNotes?.let { releaseNotes = it }
+                }
+                firebaseCredentialsPath?.let { serviceCredentialsFile = it }
+                firebaseAppId?.let { appId = it }
+            }
+        }
         getByName("release") {
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            firebaseAppDistribution {
+                artifactType = firebaseArtifactType
+                firebaseTesters?.let { testers = it }
+                firebaseGroups?.let { groups = it }
+                firebaseReleaseNotesFile?.let { releaseNotesFile = it }
+                if (firebaseReleaseNotesFile == null) {
+                    firebaseReleaseNotes?.let { releaseNotes = it }
+                }
+                firebaseCredentialsPath?.let { serviceCredentialsFile = it }
+                firebaseAppId?.let { appId = it }
+            }
         }
     }
     compileOptions {
@@ -44,6 +104,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

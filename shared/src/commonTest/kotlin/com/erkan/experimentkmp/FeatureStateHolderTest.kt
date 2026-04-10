@@ -1,18 +1,26 @@
 package com.erkan.experimentkmp
 
-import com.erkan.experimentkmp.domain.model.Note
-import com.erkan.experimentkmp.domain.model.Post
-import com.erkan.experimentkmp.domain.repository.NotesRepository
-import com.erkan.experimentkmp.domain.repository.PostsRepository
-import com.erkan.experimentkmp.domain.usecase.AddNoteUseCase
-import com.erkan.experimentkmp.domain.usecase.GetNotesUseCase
-import com.erkan.experimentkmp.domain.usecase.GetPostsUseCase
-import com.erkan.experimentkmp.domain.usecase.ToggleNoteCompletionUseCase
+import com.erkan.experimentkmp.domain.model.AccountSummary
+import com.erkan.experimentkmp.domain.model.ExpenseCategory
+import com.erkan.experimentkmp.domain.model.ExpenseCategoryCatalog
+import com.erkan.experimentkmp.domain.model.ExpenseCategoryOption
+import com.erkan.experimentkmp.domain.model.ExpenseChartEntry
+import com.erkan.experimentkmp.domain.model.ExpenseDashboard
+import com.erkan.experimentkmp.domain.model.ExpenseEntryType
+import com.erkan.experimentkmp.domain.model.ExpensePeriod
+import com.erkan.experimentkmp.domain.model.ExpenseTransaction
+import com.erkan.experimentkmp.domain.model.NewExpenseEntry
+import com.erkan.experimentkmp.domain.repository.ExpensesRepository
+import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.DeleteExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.GetExpenseCategoriesUseCase
+import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
+import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
 import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.configureSharedHttpClient
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardIntent
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
 import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
-import com.erkan.experimentkmp.presentation.notes.NotesStateHolder
-import com.erkan.experimentkmp.presentation.posts.PostsStateHolder
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -20,52 +28,133 @@ import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class FeatureStateHolderTest {
     @Test
-    fun postsStateHolderLoadsRemotePosts() = runTest {
-        val stateHolder = PostsStateHolder(
-            getPostsUseCase = GetPostsUseCase(FakePostsRepository()),
-            scope = backgroundScope,
-        )
+    fun expenseDashboardStateHolderLoadsEmptyDashboard() = runTest {
+        val repository = FakeExpensesRepository()
+        val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
 
-        assertEquals(2, stateHolder.currentState.posts.size)
-        assertEquals("Remote post", stateHolder.currentState.posts.first().title)
-        assertEquals("$89.99", stateHolder.currentState.posts.first().priceLabel)
-        assertTrue(!stateHolder.currentState.isLoading)
+        assertEquals("${'$'}0.00", stateHolder.currentState.balanceLabel)
+        assertEquals(ExpensePeriod.MONTH, stateHolder.currentState.selectedPeriod)
+        assertEquals(5, stateHolder.currentState.availableCategories.size)
+        assertEquals("Food", stateHolder.currentState.entryDraft.selectedCategory)
+        assertTrue(stateHolder.currentState.categories.isEmpty())
+        assertTrue(stateHolder.currentState.recentTransactions.isEmpty())
+        assertTrue(stateHolder.currentState.isEmpty)
     }
 
     @Test
-    fun notesStateHolderAddsAndTogglesNotes() = runTest {
-        val repository = FakeNotesRepository()
-        val stateHolder = NotesStateHolder(
-            getNotesUseCase = GetNotesUseCase(repository),
-            addNoteUseCase = AddNoteUseCase(repository),
-            toggleNoteCompletionUseCase = ToggleNoteCompletionUseCase(repository),
-            scope = backgroundScope,
+    fun saveEntryAddsTransactionAndUpdatesDashboard() = runTest {
+        val repository = FakeExpensesRepository()
+        val stateHolder = stateHolder(repository, this)
+
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
+        delay(10)
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Whole Foods"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("84.60"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateNote("Fresh groceries"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SelectCategory("Food"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SubmitEntry)
+        delay(10)
+
+        assertEquals("-${'$'}84.60", stateHolder.currentState.recentTransactions.first().amountLabel)
+        assertEquals("Whole Foods", stateHolder.currentState.recentTransactions.first().title)
+        assertEquals(1, stateHolder.currentState.categories.size)
+        assertEquals("${'$'}84.60", stateHolder.currentState.expenseLabel)
+        assertEquals("", stateHolder.currentState.entryDraft.title)
+        assertTrue(!stateHolder.currentState.isEmpty)
+    }
+
+    @Test
+    fun selectPeriodUpdatesChart() = runTest {
+        val repository = FakeExpensesRepository(
+            entries = mutableListOf(
+                NewExpenseEntry("Lunch", 18.0, "Food", "", ExpenseEntryType.EXPENSE, 1),
+            ),
         )
+        val stateHolder = stateHolder(repository, this)
 
-        stateHolder.load()
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
         delay(10)
-        stateHolder.addNote("Plan", "Ship KMP demo")
-        delay(10)
-
-        val note = stateHolder.currentState.notes.first()
-        assertEquals("Plan", note.title)
-        assertTrue(!note.isDone)
-
-        stateHolder.toggleNote(note.id)
+        stateHolder.onIntent(ExpenseDashboardIntent.SelectPeriod(ExpensePeriod.YEAR))
         delay(10)
 
-        assertTrue(stateHolder.currentState.notes.first().isDone)
+        assertEquals(ExpensePeriod.YEAR, stateHolder.currentState.selectedPeriod)
+        assertEquals("Year", stateHolder.currentState.selectedPeriodLabel)
+        assertEquals(12, stateHolder.currentState.chartPoints.size)
+    }
+
+    @Test
+    fun incomeEntryIsAcceptedWithoutExpenseCategoryValidation() = runTest {
+        val repository = FakeExpensesRepository()
+        val stateHolder = stateHolder(repository, this)
+
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
+        delay(10)
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateEntryType(true))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Salary"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("500.00"))
+        stateHolder.onIntent(ExpenseDashboardIntent.SubmitEntry)
+        delay(10)
+
+        assertEquals(1, stateHolder.currentState.recentTransactions.size)
+        assertTrue(stateHolder.currentState.recentTransactions.first().isIncome)
+        assertEquals("+${'$'}500.00", stateHolder.currentState.recentTransactions.first().amountLabel)
+    }
+
+    @Test
+    fun deleteEntryRemovesTransactionAndKeepsDraft() = runTest {
+        val repository = FakeExpensesRepository()
+        repository.addEntry(
+            NewExpenseEntry("Coffee", 6.5, "Food", "", ExpenseEntryType.EXPENSE, 1)
+        )
+        repository.addEntry(
+            NewExpenseEntry("Salary", 500.0, "Income", "", ExpenseEntryType.INCOME, 2)
+        )
+        val stateHolder = stateHolder(repository, this)
+
+        stateHolder.onIntent(ExpenseDashboardIntent.Load)
+        delay(10)
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateTitle("Taxi"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateAmount("18.20"))
+        stateHolder.onIntent(ExpenseDashboardIntent.UpdateNote("Airport"))
+        val idToDelete = stateHolder.currentState.recentTransactions.first { !it.isIncome }.id
+        stateHolder.onIntent(ExpenseDashboardIntent.DeleteEntry(idToDelete))
+        delay(10)
+
+        assertEquals(1, stateHolder.currentState.recentTransactions.size)
+        assertEquals("+${'$'}500.00", stateHolder.currentState.recentTransactions.first().amountLabel)
+        assertEquals("${'$'}0.00", stateHolder.currentState.expenseLabel)
+        assertEquals("Taxi", stateHolder.currentState.entryDraft.title)
+        assertEquals("18.20", stateHolder.currentState.entryDraft.amount)
+        assertEquals("Airport", stateHolder.currentState.entryDraft.note)
+    }
+
+    @Test
+    fun addExpenseUseCaseRejectsInvalidAmount() = runTest {
+        val repository = FakeExpensesRepository()
+        val useCase = AddExpenseEntryUseCase(repository)
+
+        val error = runCatching {
+            useCase(
+                title = "Coffee",
+                amountText = "oops",
+                category = "Food",
+                note = "",
+                isIncome = false,
+            )
+        }.exceptionOrNull()
+
+        assertEquals("Enter a valid amount.", error?.message)
     }
 
     @Test
@@ -95,7 +184,7 @@ class FeatureStateHolderTest {
     fun networkInstrumentationLogsStartAndSuccess() = runTest {
         val appLogger = InMemoryAppLogger()
         val client = HttpClient(
-            MockEngine { request ->
+            MockEngine {
                 respond(
                     content = """[{"id":1,"title":"Hello","body":"World"}]""",
                     status = HttpStatusCode.OK,
@@ -103,14 +192,14 @@ class FeatureStateHolderTest {
                 )
             },
         ) {
-            configureSharedHttpClient(engineName = "mock", appLogger = appLogger)
+            configureSharedHttpClient(appLogger = appLogger)
         }
 
         client.get("https://example.com/posts")
 
         val entries = appLogger.entries.value
-        assertTrue(entries.any { it.message.contains("REQUEST: https://example.com/posts") })
-        assertTrue(entries.any { it.message.contains("RESPONSE: 200 OK") })
+        assertTrue(entries.any { it.message.contains("--> GET /posts") })
+        assertTrue(entries.any { it.message.contains("<-- 200 GET /posts") })
     }
 
     @Test
@@ -121,7 +210,7 @@ class FeatureStateHolderTest {
                 error("network down")
             },
         ) {
-            configureSharedHttpClient(engineName = "mock", appLogger = appLogger)
+            configureSharedHttpClient(appLogger = appLogger)
         }
 
         runCatching {
@@ -129,43 +218,107 @@ class FeatureStateHolderTest {
         }
 
         val entries = appLogger.entries.value
-        assertTrue(entries.any { it.level == "ERROR" && it.message.contains("HTTP failure: GET https://example.com/posts") })
-        assertTrue(entries.any { it.message.contains("REQUEST: https://example.com/posts") })
+        assertTrue(entries.any { it.level == "ERROR" && it.message.contains("<-- ERROR GET /posts") })
+        assertTrue(entries.any { it.message.contains("--> GET /posts") })
         assertTrue(entries.any { it.details != null })
     }
-}
 
-private class FakePostsRepository : PostsRepository {
-    override suspend fun getPosts(): List<Post> = listOf(
-        Post(id = 1, title = "Remote post", body = "Fetched from API", price = 89.99, category = "bags", imageUrl = "https://example.com/1.png"),
-        Post(id = 2, title = "Cached idea", body = "Ready for UI", price = 24.5, category = "tech", imageUrl = "https://example.com/2.png"),
-    )
-}
-
-private class FakeNotesRepository : NotesRepository {
-    private val notes = mutableListOf<Note>()
-
-    override suspend fun getNotes(): List<Note> = notes.toList()
-
-    override suspend fun addNote(title: String, body: String): List<Note> {
-        notes.add(
-            0,
-            Note(
-                id = (notes.size + 1).toLong(),
-                title = title,
-                body = body,
-                isDone = false,
-            ),
+    private fun stateHolder(
+        repository: FakeExpensesRepository,
+        scope: TestScope,
+    ): ExpenseDashboardStateHolder =
+        ExpenseDashboardStateHolder(
+            getExpenseDashboardUseCase = GetExpenseDashboardUseCase(repository),
+            getRecentTransactionsUseCase = GetRecentTransactionsUseCase(repository),
+            getExpenseCategoriesUseCase = GetExpenseCategoriesUseCase(repository),
+            addExpenseEntryUseCase = AddExpenseEntryUseCase(repository),
+            deleteExpenseEntryUseCase = DeleteExpenseEntryUseCase(repository),
+            scope = scope.backgroundScope,
         )
-        return notes.toList()
+}
+
+private class FakeExpensesRepository(
+    val entries: MutableList<NewExpenseEntry> = mutableListOf(),
+) : ExpensesRepository {
+    override suspend fun getDashboard(period: ExpensePeriod): ExpenseDashboard {
+        val expenses = entries.filter { it.type == ExpenseEntryType.EXPENSE }
+        val income = entries.filter { it.type == ExpenseEntryType.INCOME }.sumOf { it.amount }
+        val expense = expenses.sumOf { it.amount }
+        val categories = expenses
+            .groupBy { it.category }
+            .map { (category, groupedEntries) ->
+                val spent = groupedEntries.sumOf { it.amount }
+                ExpenseCategory(
+                    name = category,
+                    spent = spent,
+                    share = if (expense > 0.0) spent / expense else 0.0,
+                    accentHex = ExpenseCategoryCatalog.accentHexFor(category, isIncome = false),
+                )
+            }
+
+        return ExpenseDashboard(
+            period = period,
+            summary = AccountSummary(
+                balance = income - expense,
+                income = income,
+                expense = expense,
+            ),
+            chartEntries = when (period) {
+                ExpensePeriod.YEAR -> List(12) { index ->
+                    ExpenseChartEntry(label = "M${index + 1}", amount = 10.0 * (index + 1))
+                }
+
+                ExpensePeriod.MONTH -> List(6) { index ->
+                    ExpenseChartEntry(label = "${(index + 1) * 5}", amount = if (index == 5) expense else 0.0)
+                }
+
+                ExpensePeriod.WEEK -> listOf(
+                    ExpenseChartEntry("Mon", 0.0),
+                    ExpenseChartEntry("Tue", 0.0),
+                    ExpenseChartEntry("Wed", 0.0),
+                    ExpenseChartEntry("Thu", 0.0),
+                    ExpenseChartEntry("Fri", expense),
+                    ExpenseChartEntry("Sat", 0.0),
+                    ExpenseChartEntry("Sun", 0.0),
+                )
+            },
+            categories = categories,
+        )
     }
 
-    override suspend fun toggleNote(id: Long): List<Note> {
-        val index = notes.indexOfFirst { it.id == id }
-        if (index >= 0) {
-            val note = notes[index]
-            notes[index] = note.copy(isDone = !note.isDone)
+    override suspend fun getRecentTransactions(limit: Int): List<ExpenseTransaction> = entries
+        .asReversed()
+        .take(limit)
+        .mapIndexed { index, entry ->
+            ExpenseTransaction(
+                id = (index + 1).toLong(),
+                title = entry.title,
+                subtitle = entry.note.ifBlank {
+                    if (entry.type == ExpenseEntryType.INCOME) "Income" else entry.category
+                },
+                dateLabel = "Apr 09",
+                category = if (entry.type == ExpenseEntryType.INCOME) "Income" else entry.category,
+                amount = if (entry.type == ExpenseEntryType.INCOME) entry.amount else -entry.amount,
+                accentHex = ExpenseCategoryCatalog.accentHexFor(
+                    category = entry.category,
+                    isIncome = entry.type == ExpenseEntryType.INCOME,
+                ),
+                isIncome = entry.type == ExpenseEntryType.INCOME,
+            )
         }
-        return notes.toList()
+
+    override suspend fun addEntry(entry: NewExpenseEntry) {
+        entries += entry
     }
+
+    override suspend fun deleteEntry(id: Long) {
+        if (id <= 0L) return
+        val index = entries.lastIndex - (id.toInt() - 1)
+        if (index in entries.indices) {
+            entries.removeAt(index)
+        }
+    }
+
+    override fun getAvailableCategories(): List<ExpenseCategoryOption> =
+        ExpenseCategoryCatalog.allSelectable()
 }

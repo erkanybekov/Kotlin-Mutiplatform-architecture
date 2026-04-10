@@ -1,49 +1,78 @@
 package com.erkan.experimentkmp.android
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.erkan.experimentkmp.android.uikit.ExpensePalette
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) {
-        darkColorScheme(
-            primary = Color(0xFFBB86FC),
-            secondary = Color(0xFF03DAC5),
-            tertiary = Color(0xFF3700B3)
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(0xFF6200EE),
-            secondary = Color(0xFF03DAC5),
-            tertiary = Color(0xFF3700B3)
-        )
-    }
+    val colors = darkColorScheme(
+        primary = ExpensePalette.AccentWarm,
+        secondary = ExpensePalette.AccentSuccess,
+        tertiary = ExpensePalette.AccentIndigo,
+        background = ExpensePalette.Background,
+        surface = ExpensePalette.Surface,
+        surfaceVariant = Color(0xFF131E34),
+        onBackground = ExpensePalette.TextPrimary,
+        onSurface = ExpensePalette.TextPrimary,
+        onSurfaceVariant = ExpensePalette.TextSecondary,
+        error = ExpensePalette.Error,
+    )
     val typography = Typography(
+        headlineLarge = TextStyle(
+            fontWeight = FontWeight.Black,
+            fontSize = 34.sp,
+            lineHeight = 38.sp,
+            letterSpacing = (-0.8).sp,
+        ),
+        displaySmall = TextStyle(
+            fontWeight = FontWeight.Black,
+            fontSize = 36.sp,
+            lineHeight = 40.sp,
+            letterSpacing = (-0.6).sp,
+        ),
+        titleLarge = TextStyle(
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+        ),
+        titleMedium = TextStyle(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+        ),
+        labelLarge = TextStyle(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.2.sp,
+        ),
         bodyMedium = TextStyle(
-            fontFamily = FontFamily.Default,
             fontWeight = FontWeight.Normal,
-            fontSize = 16.sp
-        )
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+        ),
+        bodySmall = TextStyle(
+            fontWeight = FontWeight.Normal,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+        ),
     )
     val shapes = Shapes(
-        small = RoundedCornerShape(4.dp),
-        medium = RoundedCornerShape(4.dp),
-        large = RoundedCornerShape(0.dp)
+        small = RoundedCornerShape(18.dp),
+        medium = RoundedCornerShape(24.dp),
+        large = RoundedCornerShape(32.dp),
     )
 
     MaterialTheme(

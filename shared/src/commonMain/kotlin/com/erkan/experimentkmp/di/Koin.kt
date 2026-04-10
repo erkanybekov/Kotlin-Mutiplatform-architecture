@@ -1,26 +1,21 @@
 package com.erkan.experimentkmp.di
 
-import com.erkan.experimentkmp.data.local.NotesLocalDataSource
-import com.erkan.experimentkmp.data.remote.JsonPlaceholderPostsApi
-import com.erkan.experimentkmp.data.remote.PostsApi
-import com.erkan.experimentkmp.data.repository.DefaultNotesRepository
-import com.erkan.experimentkmp.data.repository.DefaultPostsRepository
-import com.erkan.experimentkmp.domain.repository.NotesRepository
-import com.erkan.experimentkmp.domain.repository.PostsRepository
-import com.erkan.experimentkmp.domain.usecase.AddNoteUseCase
-import com.erkan.experimentkmp.domain.usecase.GetNotesUseCase
-import com.erkan.experimentkmp.domain.usecase.GetPostsUseCase
-import com.erkan.experimentkmp.domain.usecase.ToggleNoteCompletionUseCase
+import com.erkan.experimentkmp.data.local.db.expenseDatabaseModule
+import com.erkan.experimentkmp.data.repository.RoomExpensesRepository
+import com.erkan.experimentkmp.domain.repository.ExpensesRepository
+import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.DeleteExpenseEntryUseCase
+import com.erkan.experimentkmp.domain.usecase.GetExpenseDashboardUseCase
+import com.erkan.experimentkmp.domain.usecase.GetExpenseCategoriesUseCase
+import com.erkan.experimentkmp.domain.usecase.GetRecentTransactionsUseCase
 import com.erkan.experimentkmp.logging.AppLogger
 import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.createPlatformHttpClient
 import com.erkan.experimentkmp.platform.Platform
 import com.erkan.experimentkmp.platform.getPlatform
+import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
 import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
-import com.erkan.experimentkmp.presentation.notes.NotesStateHolder
-import com.erkan.experimentkmp.presentation.posts.PostsStateHolder
 import io.ktor.client.HttpClient
-import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -28,31 +23,26 @@ import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatformTools
 
-fun sharedModule(
+@Suppress("UNUSED_PARAMETER")
+fun sharedModules(
     storageDirectoryPath: String,
     platformProvider: () -> Platform = ::getPlatform,
-): Module = module {
+): List<Module> = listOf(
+    module {
     single<Platform> { platformProvider() }
     single<AppLogger> { InMemoryAppLogger() }
     single<HttpClient> { createPlatformHttpClient(get()) }
-    single {
-        Json {
-            ignoreUnknownKeys = true
-            prettyPrint = false
-        }
-    }
-    single { NotesLocalDataSource(storageDirectoryPath = storageDirectoryPath, json = get()) }
-    single<PostsApi> { JsonPlaceholderPostsApi(get()) }
-    single<PostsRepository> { DefaultPostsRepository(get()) }
-    single<NotesRepository> { DefaultNotesRepository(get()) }
-    single { GetPostsUseCase(get()) }
-    single { GetNotesUseCase(get()) }
-    single { AddNoteUseCase(get()) }
-    single { ToggleNoteCompletionUseCase(get()) }
+    single<ExpensesRepository> { RoomExpensesRepository(get()) }
+    single { GetExpenseDashboardUseCase(get()) }
+    single { GetExpenseCategoriesUseCase(get()) }
+    single { GetRecentTransactionsUseCase(get()) }
+    single { AddExpenseEntryUseCase(get()) }
+    single { DeleteExpenseEntryUseCase(get()) }
     single { LogsStateHolder(get()) }
-    single { PostsStateHolder(get()) }
-    single { NotesStateHolder(get(), get(), get()) }
-}
+    single { ExpenseDashboardStateHolder(get(), get(), get(), get(), get()) }
+    },
+    expenseDatabaseModule(storageDirectoryPath),
+)
 
 fun initKoin(
     storageDirectoryPath: String,
@@ -62,7 +52,7 @@ fun initKoin(
 
     return startKoin {
         appDeclaration()
-        modules(sharedModule(storageDirectoryPath = storageDirectoryPath))
+        modules(sharedModules(storageDirectoryPath = storageDirectoryPath))
     }.koin
 }
 
@@ -73,7 +63,6 @@ class SharedAppGraph private constructor(
         KoinPlatformTools.defaultContext().getOrNull() ?: initKoin(storageDirectoryPath),
     )
 
-    fun postsStateHolder(): PostsStateHolder = koin.get()
-    fun notesStateHolder(): NotesStateHolder = koin.get()
+    fun expenseDashboardStateHolder(): ExpenseDashboardStateHolder = koin.get()
     fun logsStateHolder(): LogsStateHolder = koin.get()
 }

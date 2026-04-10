@@ -6,12 +6,16 @@
     	objectVersion = 50;
     	objects = {
 
-    /* Begin PBXBuildFile section */
+/* Begin PBXBuildFile section */
 058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
+1A1100012600AC8F00CF470E /* ExpenseDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1100022600AC8F00CF470E /* ExpenseDashboardView.swift */; };
+1A1100032600AC8F00CF470E /* ExpenseDashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1100042600AC8F00CF470E /* ExpenseDashboardViewModel.swift */; };
+1A1100052600AC8F00CF470E /* ExpenseDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1100062600AC8F00CF470E /* ExpenseDesignSystem.swift */; };
+1A1100072600AC8F00CF470E /* ExpenseComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1100082600AC8F00CF470E /* ExpenseComponents.swift */; };
     		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
     		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
-    /* End PBXBuildFile section */
+/* End PBXBuildFile section */
 
     /* Begin PBXCopyFilesBuildPhase section */
     		7555FFB4242A642300829871 /* Embed Frameworks */ = {
@@ -26,14 +30,18 @@
     		};
     /* End PBXCopyFilesBuildPhase section */
 
-    /* Begin PBXFileReference section */
+/* Begin PBXFileReference section */
     		058557BA273AAA24004C7B11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+1A1100022600AC8F00CF470E /* ExpenseDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDashboardView.swift; sourceTree = "<group>"; };
+1A1100042600AC8F00CF470E /* ExpenseDashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDashboardViewModel.swift; sourceTree = "<group>"; };
+1A1100062600AC8F00CF470E /* ExpenseDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseDesignSystem.swift; sourceTree = "<group>"; };
+1A1100082600AC8F00CF470E /* ExpenseComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseComponents.swift; sourceTree = "<group>"; };
     		2152FB032600AC8F00CF470E /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
     		7555FF7B242A565900829871 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
     		7555FF82242A565900829871 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
     		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-    /* End PBXFileReference section */
+/* End PBXFileReference section */
 
     /* Begin PBXFrameworksBuildPhase section */
     		7555FF78242A565900829871 /* Frameworks */ = {
@@ -45,7 +53,16 @@
     		};
     /* End PBXFrameworksBuildPhase section */
 
-    /* Begin PBXGroup section */
+/* Begin PBXGroup section */
+    		1A1100092600AC8F00CF470E /* UIKit */ = {
+			isa = PBXGroup;
+			children = (
+				1A1100062600AC8F00CF470E /* ExpenseDesignSystem.swift */,
+				1A1100082600AC8F00CF470E /* ExpenseComponents.swift */,
+			);
+			path = UIKit;
+			sourceTree = "<group>";
+		};
     		058557D7273AAEEB004C7B11 /* Preview Content */ = {
 	isa = PBXGroup;
 	children = (
@@ -76,8 +93,11 @@
     			children = (
     				058557BA273AAA24004C7B11 /* Assets.xcassets */,
     				7555FF82242A565900829871 /* ContentView.swift */,
+    				1A1100042600AC8F00CF470E /* ExpenseDashboardViewModel.swift */,
+    				1A1100022600AC8F00CF470E /* ExpenseDashboardView.swift */,
     				7555FF8C242A565B00829871 /* Info.plist */,
     				2152FB032600AC8F00CF470E /* iOSApp.swift */,
+    				1A1100092600AC8F00CF470E /* UIKit */,
 		058557D7273AAEEB004C7B11 /* Preview Content */,
     			);
     			path = iosApp;
@@ -177,11 +197,15 @@
 		};
     /* End PBXShellScriptBuildPhase section */
 
-    /* Begin PBXSourcesBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */
     		7555FF77242A565900829871 /* Sources */ = {
     			isa = PBXSourcesBuildPhase;
     			buildActionMask = 2147483647;
     			files = (
+    				1A1100052600AC8F00CF470E /* ExpenseDesignSystem.swift in Sources */,
+    				1A1100072600AC8F00CF470E /* ExpenseComponents.swift in Sources */,
+    				1A1100032600AC8F00CF470E /* ExpenseDashboardViewModel.swift in Sources */,
+    				1A1100012600AC8F00CF470E /* ExpenseDashboardView.swift in Sources */,
     				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
     				7555FF83242A565900829871 /* ContentView.swift in Sources */,
     			);
