@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,9 @@ fun ExpenseDashboardScreen(
     onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(ExpenseDashboardTestTags.Screen),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -87,6 +90,7 @@ fun ExpenseDashboardScreen(
             state.errorMessage?.let { error ->
                 item {
                     Card(
+                        modifier = Modifier.testTag(ExpenseDashboardTestTags.ErrorCard),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                         ),
@@ -140,6 +144,7 @@ private fun QuickEntrySection(
     onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Card(
+        modifier = Modifier.testTag(ExpenseDashboardTestTags.QuickEntrySection),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -156,12 +161,15 @@ private fun QuickEntrySection(
             ExpenseTypeSelector(
                 isIncome = draft.isIncome,
                 onToggle = { onIntent(ExpenseDashboardIntent.UpdateEntryType(it)) },
+                expenseChipModifier = Modifier.testTag(ExpenseDashboardTestTags.ExpenseTypeChip),
+                incomeChipModifier = Modifier.testTag(ExpenseDashboardTestTags.IncomeTypeChip),
             )
 
             ExpenseInputField(
                 value = draft.title,
                 onValueChange = { onIntent(ExpenseDashboardIntent.UpdateTitle(it)) },
                 label = "Title",
+                modifier = Modifier.testTag(ExpenseDashboardTestTags.TitleInput),
                 errorText = draft.titleError,
             )
 
@@ -169,6 +177,7 @@ private fun QuickEntrySection(
                 value = draft.amount,
                 onValueChange = { onIntent(ExpenseDashboardIntent.UpdateAmount(it)) },
                 label = "Amount",
+                modifier = Modifier.testTag(ExpenseDashboardTestTags.AmountInput),
                 errorText = draft.amountError,
             )
 
@@ -176,6 +185,7 @@ private fun QuickEntrySection(
                 value = draft.note,
                 onValueChange = { onIntent(ExpenseDashboardIntent.UpdateNote(it)) },
                 label = "Note",
+                modifier = Modifier.testTag(ExpenseDashboardTestTags.NoteInput),
                 singleLine = false,
             )
 
@@ -187,6 +197,7 @@ private fun QuickEntrySection(
                     onCategorySelected = {
                         onIntent(ExpenseDashboardIntent.SelectCategory(it))
                     },
+                    modifier = Modifier.testTag(ExpenseDashboardTestTags.CategoryInput),
                 )
             }
 
@@ -194,6 +205,7 @@ private fun QuickEntrySection(
                 title = if (draft.isIncome) "Save income" else "Save expense",
                 isLoading = isSaving,
                 onClick = { onIntent(ExpenseDashboardIntent.SubmitEntry) },
+                modifier = Modifier.testTag(ExpenseDashboardTestTags.SaveButton),
             )
         }
     }
@@ -206,6 +218,7 @@ private fun AnalyticsSection(
     onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
     Card(
+        modifier = Modifier.testTag(ExpenseDashboardTestTags.AnalyticsSection),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -222,6 +235,9 @@ private fun AnalyticsSection(
                 selectedPeriod = selectedPeriod,
                 onPeriodSelected = {
                     onIntent(ExpenseDashboardIntent.SelectPeriod(it))
+                },
+                chipModifierProvider = { period ->
+                    Modifier.testTag(ExpenseDashboardTestTags.periodChip(period))
                 },
             )
             if (chartPoints.any { it.amount > 0.0 }) {
@@ -240,7 +256,10 @@ private fun AnalyticsSection(
 private fun CategoriesSection(
     categories: List<CategoryBreakdownUi>,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.testTag(ExpenseDashboardTestTags.CategoriesSection),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         ExpenseSectionHeader(
             title = "Categories",
             supportingText = "Totals are derived from saved expense entries.",
@@ -263,13 +282,17 @@ private fun TransactionsSection(
     transactions: List<TransactionItemUi>,
     onIntent: (ExpenseDashboardIntent) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.testTag(ExpenseDashboardTestTags.TransactionsSection),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         ExpenseSectionHeader(
             title = "Recent transactions",
             supportingText = "Most recent entries are shown first.",
         )
         if (transactions.isEmpty()) {
             ExpenseEmptyStateCard(
+                modifier = Modifier.testTag(ExpenseDashboardTestTags.EmptyTransactionsCard),
                 title = "No entries yet",
                 message = "Your latest expenses and income will appear here after the first save.",
             )
@@ -277,6 +300,12 @@ private fun TransactionsSection(
             transactions.forEach { transaction ->
                 ExpenseTransactionRow(
                     transaction = transaction,
+                    modifier = Modifier.testTag(
+                        ExpenseDashboardTestTags.transactionRow(transaction.id),
+                    ),
+                    deleteButtonModifier = Modifier.testTag(
+                        ExpenseDashboardTestTags.transactionDeleteButton(transaction.id),
+                    ),
                     onDelete = {
                         onIntent(ExpenseDashboardIntent.DeleteEntry(transaction.id))
                     },

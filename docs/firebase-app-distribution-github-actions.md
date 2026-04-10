@@ -8,8 +8,10 @@ This project now uses a staged GitHub Actions pipeline for Android verification 
    Resolves the build variant, artifact type, Gradle tasks, and artifact names.
 2. `verify-android`
    Runs unit tests, lint, and the Android build.
-3. `distribute-android`
-   Runs only after successful verification, downloads the built artifact, and uploads it to Firebase App Distribution.
+3. `ui-tests-android`
+   Runs `connectedDebugAndroidTest` on an emulator for `debug` builds.
+4. `distribute-android`
+   Runs only after successful verification and, for `debug`, successful UI tests. It downloads the built artifact and uploads it to Firebase App Distribution.
 
 ## Best-practice choices in this pipeline
 
@@ -17,6 +19,7 @@ This project now uses a staged GitHub Actions pipeline for Android verification 
 - Uses a service account instead of legacy `FIREBASE_TOKEN`.
 - Uses `google-github-actions/auth` to create and clean up temporary credentials during the distribution job.
 - Verifies code before distribution instead of building and uploading in one opaque step.
+- Runs Android instrumentation UI tests in a separate emulator-backed job.
 - Uploads verification reports and the built distribution artifact as workflow artifacts.
 - Limits automatic push-based distributions to Android and Gradle-related file changes.
 - Runs verification on pull requests, but skips Firebase distribution there.
@@ -24,9 +27,9 @@ This project now uses a staged GitHub Actions pipeline for Android verification 
 ## Workflow behavior
 
 - `pull_request`
-  Runs Android verification only.
+  Runs Android verification and `debug` UI tests only.
 - `push` to `master-multiplatform`
-  Runs verification, then distributes a `debug` APK to Firebase App Distribution.
+  Runs verification, `debug` UI tests, then distributes a `debug` APK to Firebase App Distribution.
 - `workflow_dispatch`
   Lets you choose:
   - `debug` or `release`
@@ -42,10 +45,15 @@ The verification job runs variant-specific tasks:
 - `:androidApp:lint<Variant>`
 - `assemble<Variant>` or `bundle<Variant>`
 
+The UI test job runs:
+
+- `:androidApp:connectedDebugAndroidTest`
+
 For the current project:
 
 - `shared` unit tests are active.
 - `androidApp` unit tests currently resolve to `NO-SOURCE`, which is valid until app-level tests are added.
+- `androidApp` now has initial Compose instrumentation tests for the dashboard screen.
 
 ## Distribution flow
 
@@ -57,6 +65,8 @@ It:
 2. Authenticates with Google Cloud using the Firebase service account
 3. Generates release notes from the GitHub run metadata and latest commit message
 4. Uploads the already-built APK or AAB to Firebase App Distribution
+
+For `debug`, this happens only after emulator-based UI tests succeed.
 
 ## Required GitHub Secrets
 
@@ -99,6 +109,8 @@ kanybekov668@gmail.com
 - Verification reports:
   - `android-verification-reports-debug`
   - `android-verification-reports-release`
+- UI test reports:
+  - `android-ui-test-reports-debug`
 
 ## Notes for KMP
 
@@ -122,6 +134,14 @@ Debug verification and build:
   :androidApp:lintDebug \
   :androidApp:assembleDebug
 ```
+
+Debug UI tests:
+
+```bash
+./gradlew :androidApp:connectedDebugAndroidTest
+```
+
+This command requires a connected device or booted emulator.
 
 Debug distribution:
 
