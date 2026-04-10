@@ -1,9 +1,14 @@
 package com.erkan.experimentkmp.android.dashboard
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import com.erkan.experimentkmp.android.MyApplicationTheme
 import com.erkan.experimentkmp.domain.model.ExpensePeriod
@@ -24,14 +29,9 @@ class ExpenseDashboardScreenTest {
 
     @Test
     fun emptyTransactionsState_isShown() {
-        composeRule.setContent {
-            MyApplicationTheme {
-                ExpenseDashboardScreen(
-                    state = ExpenseDashboardUiState(),
-                    onIntent = {},
-                )
-            }
-        }
+        setDashboardContent(state = ExpenseDashboardUiState())
+
+        composeRule.scrollToTag(ExpenseDashboardTestTags.EmptyTransactionsCard)
 
         composeRule
             .onNodeWithTag(ExpenseDashboardTestTags.EmptyTransactionsCard)
@@ -42,20 +42,17 @@ class ExpenseDashboardScreenTest {
     fun quickEntry_dispatchesInputTypeAndSubmitIntents() {
         val intents = mutableListOf<ExpenseDashboardIntent>()
 
-        composeRule.setContent {
-            MyApplicationTheme {
-                ExpenseDashboardScreen(
-                    state = ExpenseDashboardUiState(
-                        availableCategories = listOf(
-                            CategoryOptionUi("Food", "#FF8A5B"),
-                            CategoryOptionUi("Transport", "#47D1B0"),
-                        ),
-                    ),
-                    onIntent = intents::add,
-                )
-            }
-        }
+        setDashboardContent(
+            state = ExpenseDashboardUiState(
+                availableCategories = listOf(
+                    CategoryOptionUi("Food", "#FF8A5B"),
+                    CategoryOptionUi("Transport", "#47D1B0"),
+                ),
+            ),
+            intents = intents,
+        )
 
+        composeRule.scrollToTag(ExpenseDashboardTestTags.QuickEntrySection)
         composeRule.onNodeWithTag(ExpenseDashboardTestTags.TitleInput).performTextInput("Coffee")
         composeRule.onNodeWithTag(ExpenseDashboardTestTags.AmountInput).performTextInput("12.50")
         composeRule.onNodeWithTag(ExpenseDashboardTestTags.NoteInput).performTextInput("Morning drink")
@@ -82,17 +79,14 @@ class ExpenseDashboardScreenTest {
     fun periodSelection_dispatchesIntent() {
         val intents = mutableListOf<ExpenseDashboardIntent>()
 
-        composeRule.setContent {
-            MyApplicationTheme {
-                ExpenseDashboardScreen(
-                    state = ExpenseDashboardUiState(
-                        selectedPeriod = ExpensePeriod.MONTH,
-                    ),
-                    onIntent = intents::add,
-                )
-            }
-        }
+        setDashboardContent(
+            state = ExpenseDashboardUiState(
+                selectedPeriod = ExpensePeriod.MONTH,
+            ),
+            intents = intents,
+        )
 
+        composeRule.scrollToTag(ExpenseDashboardTestTags.AnalyticsSection)
         composeRule
             .onNodeWithTag(ExpenseDashboardTestTags.periodChip(ExpensePeriod.YEAR))
             .performClick()
@@ -104,33 +98,97 @@ class ExpenseDashboardScreenTest {
     fun deleteTransaction_dispatchesDeleteIntent() {
         val intents = mutableListOf<ExpenseDashboardIntent>()
 
-        composeRule.setContent {
-            MyApplicationTheme {
-                ExpenseDashboardScreen(
-                    state = ExpenseDashboardUiState(
-                        recentTransactions = listOf(
-                            TransactionItemUi(
-                                id = 42L,
-                                title = "Taxi",
-                                subtitle = "Airport",
-                                dateLabel = "Apr 10",
-                                category = "Transport",
-                                amountLabel = "-$24.00",
-                                accentHex = "#47D1B0",
-                                isIncome = false,
-                            ),
-                        ),
-                        isEmpty = false,
+        setDashboardContent(
+            state = ExpenseDashboardUiState(
+                recentTransactions = listOf(
+                    TransactionItemUi(
+                        id = 42L,
+                        title = "Taxi",
+                        subtitle = "Airport",
+                        dateLabel = "Apr 10",
+                        category = "Transport",
+                        amountLabel = "-$24.00",
+                        accentHex = "#47D1B0",
+                        isIncome = false,
                     ),
-                    onIntent = intents::add,
-                )
-            }
-        }
+                ),
+                isEmpty = false,
+            ),
+            intents = intents,
+        )
 
+        composeRule.scrollToTag(ExpenseDashboardTestTags.transactionDeleteButton(42L))
         composeRule
             .onNodeWithTag(ExpenseDashboardTestTags.transactionDeleteButton(42L))
             .performClick()
 
         assertTrue(intents.contains(ExpenseDashboardIntent.DeleteEntry(42L)))
+    }
+
+    private fun setDashboardContent(
+        state: ExpenseDashboardUiState,
+        intents: MutableList<ExpenseDashboardIntent> = mutableListOf(),
+    ) {
+        composeRule.setContent {
+            var currentState by mutableStateOf(state)
+
+            MyApplicationTheme {
+                ExpenseDashboardScreen(
+                    state = currentState,
+                    onIntent = { intent ->
+                        intents += intent
+                        currentState = currentState.reduceForTest(intent)
+                    },
+                )
+            }
+        }
+    }
+
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.scrollToTag(tag: String) {
+        onNodeWithTag(ExpenseDashboardTestTags.ContentList)
+            .performScrollToNode(hasTestTag(tag))
+    }
+
+    private fun ExpenseDashboardUiState.reduceForTest(
+        intent: ExpenseDashboardIntent,
+    ): ExpenseDashboardUiState = when (intent) {
+        is ExpenseDashboardIntent.UpdateTitle -> copy(
+            entryDraft = entryDraft.copy(title = intent.value),
+        )
+
+        is ExpenseDashboardIntent.UpdateAmount -> copy(
+            entryDraft = entryDraft.copy(amount = intent.value),
+        )
+
+        is ExpenseDashboardIntent.UpdateNote -> copy(
+            entryDraft = entryDraft.copy(note = intent.value),
+        )
+
+        is ExpenseDashboardIntent.UpdateEntryType -> copy(
+            entryDraft = entryDraft.copy(isIncome = intent.isIncome),
+        )
+
+        is ExpenseDashboardIntent.SelectCategory -> copy(
+            entryDraft = entryDraft.copy(selectedCategory = intent.category),
+        )
+
+        is ExpenseDashboardIntent.SelectPeriod -> copy(
+            selectedPeriod = intent.period,
+            selectedPeriodLabel = intent.period.label,
+        )
+
+        is ExpenseDashboardIntent.DeleteEntry -> {
+            val updatedTransactions = recentTransactions.filterNot { it.id == intent.id }
+            copy(
+                recentTransactions = updatedTransactions,
+                isEmpty = updatedTransactions.isEmpty(),
+            )
+        }
+
+        ExpenseDashboardIntent.Load,
+        ExpenseDashboardIntent.Refresh,
+        ExpenseDashboardIntent.SubmitEntry,
+        ExpenseDashboardIntent.DismissError,
+        -> this
     }
 }

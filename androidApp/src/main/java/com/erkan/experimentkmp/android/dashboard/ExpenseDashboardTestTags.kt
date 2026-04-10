@@ -4,6 +4,7 @@ import com.erkan.experimentkmp.domain.model.ExpensePeriod
 
 object ExpenseDashboardTestTags {
     const val Screen = "expense_dashboard_screen"
+    const val ContentList = "expense_dashboard_content_list"
     const val ErrorCard = "expense_dashboard_error_card"
     const val QuickEntrySection = "expense_dashboard_quick_entry_section"
     const val TitleInput = "expense_dashboard_title_input"
