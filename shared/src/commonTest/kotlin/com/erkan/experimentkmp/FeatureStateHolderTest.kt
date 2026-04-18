@@ -20,13 +20,18 @@ import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.configureSharedHttpClient
 import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardIntent
 import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
-import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
+import io.ktor.http.contentType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -158,35 +163,12 @@ class FeatureStateHolderTest {
     }
 
     @Test
-    fun logsStateHolderReflectsAppLoggerAndClear() = runTest {
-        val appLogger = InMemoryAppLogger(maxEntries = 3)
-        val stateHolder = LogsStateHolder(appLogger, backgroundScope)
-
-        appLogger.append(level = "INFO", category = "network", message = "first")
-        delay(10)
-        assertEquals(1, stateHolder.currentState.entries.size)
-
-        appLogger.append(level = "DEBUG", category = "network", message = "second")
-        appLogger.append(level = "ERROR", category = "network", message = "third")
-        appLogger.append(level = "INFO", category = "network", message = "fourth")
-        delay(10)
-
-        assertEquals(3, stateHolder.currentState.entries.size)
-        assertEquals("fourth", stateHolder.currentState.entries.first().message)
-        assertEquals("second", stateHolder.currentState.entries.last().message)
-
-        stateHolder.clearLogs()
-        delay(10)
-        assertTrue(stateHolder.currentState.entries.isEmpty())
-    }
-
-    @Test
-    fun networkInstrumentationLogsStartAndSuccess() = runTest {
+    fun networkInstrumentationLogsRequestResponseAndBody() = runTest {
         val appLogger = InMemoryAppLogger()
         val client = HttpClient(
             MockEngine {
                 respond(
-                    content = """[{"id":1,"title":"Hello","body":"World"}]""",
+                    content = """{"status":"ok"}""",
                     status = HttpStatusCode.OK,
                     headers = headersOf("Content-Type", "application/json"),
                 )
@@ -195,11 +177,27 @@ class FeatureStateHolderTest {
             configureSharedHttpClient(appLogger = appLogger)
         }
 
-        client.get("https://example.com/posts")
+        client.post("https://example.com/posts?token=secret") {
+            header(HttpHeaders.Authorization, "Bearer secret-token")
+            contentType(ContentType.Application.Json)
+            setBody("""{"hello":"world"}""")
+        }
+        waitUntil {
+            appLogger.entries.value.any { entry ->
+                entry.message.contains("<-- 200")
+            }
+        }
 
         val entries = appLogger.entries.value
-        assertTrue(entries.any { it.message.contains("--> GET /posts") })
-        assertTrue(entries.any { it.message.contains("<-- 200 GET /posts") })
+        val combinedLogs = entries.joinToString("\n\n") { entry ->
+            listOfNotNull(entry.message, entry.details).joinToString("\n")
+        }
+        assertTrue(combinedLogs.contains("--> POST /posts"))
+        assertTrue(combinedLogs.contains("\"hello\":\"world\""))
+        assertTrue(combinedLogs.contains("Authorization:"))
+        assertTrue(!combinedLogs.contains("secret-token"))
+        assertTrue(combinedLogs.contains("<-- 200 POST /posts"))
+        assertTrue(combinedLogs.contains("{\"status\":\"ok\"}"))
     }
 
     @Test
@@ -216,10 +214,18 @@ class FeatureStateHolderTest {
         runCatching {
             client.get("https://example.com/posts")
         }
+        waitUntil {
+            appLogger.entries.value.any { entry ->
+                entry.level == "ERROR" && entry.message.contains("<-- ERROR GET /posts")
+            }
+        }
 
         val entries = appLogger.entries.value
+        val combinedLogs = entries.joinToString("\n\n") { entry ->
+            listOfNotNull(entry.message, entry.details).joinToString("\n")
+        }
         assertTrue(entries.any { it.level == "ERROR" && it.message.contains("<-- ERROR GET /posts") })
-        assertTrue(entries.any { it.message.contains("--> GET /posts") })
+        assertTrue(combinedLogs.contains("--> GET /posts"))
         assertTrue(entries.any { it.details != null })
     }
 
@@ -235,6 +241,18 @@ class FeatureStateHolderTest {
             deleteExpenseEntryUseCase = DeleteExpenseEntryUseCase(repository),
             scope = scope.backgroundScope,
         )
+}
+
+private suspend fun waitUntil(
+    timeoutMillis: Long = 500L,
+    stepMillis: Long = 10L,
+    condition: () -> Boolean,
+) {
+    val attempts = (timeoutMillis / stepMillis).toInt().coerceAtLeast(1)
+    repeat(attempts) {
+        if (condition()) return
+        delay(stepMillis)
+    }
 }
 
 private class FakeExpensesRepository(

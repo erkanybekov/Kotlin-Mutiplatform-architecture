@@ -27,6 +27,8 @@ class InMemoryAppLogger(
             details = details,
         )
 
+        writePlatformLog(newEntry)
+
         _entries.value = buildList {
             add(newEntry)
             addAll(_entries.value.take(maxEntries - 1))

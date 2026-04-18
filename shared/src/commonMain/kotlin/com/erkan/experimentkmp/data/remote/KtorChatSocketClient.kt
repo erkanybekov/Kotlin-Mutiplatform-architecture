@@ -49,9 +49,9 @@ class KtorChatSocketClient(
             if (session != null) return
             eventFlow.tryEmit(ChatSocketEvent.StatusChanged(ChatSocketStatus.CONNECTING))
             appLogger.append(
-                level = "INFO",
-                category = "chat",
-                message = "Opening websocket connection",
+                level = "DEBUG",
+                category = "network",
+                message = "--> WS CONNECT /ws/chat",
             )
 
             val createdSession = httpClient.webSocketSession {
@@ -61,6 +61,11 @@ class KtorChatSocketClient(
             }
 
             session = createdSession
+            appLogger.append(
+                level = "INFO",
+                category = "network",
+                message = "<-- WS CONNECTED /ws/chat",
+            )
             incomingJob?.cancel()
             incomingJob = scope.launch {
                 observeIncoming(createdSession)
@@ -78,6 +83,11 @@ class KtorChatSocketClient(
             current
         }
 
+        appLogger.append(
+            level = "DEBUG",
+            category = "network",
+            message = "--> WS CLOSE /ws/chat",
+        )
         activeSession?.close(
             CloseReason(
                 CloseReason.Codes.NORMAL,
@@ -101,7 +111,14 @@ class KtorChatSocketClient(
             clientMessageId = clientMessageId,
             content = content,
         )
-        activeSession.send(Frame.Text(AppJson.encodeToString(payload)))
+        val encodedPayload = AppJson.encodeToString(payload)
+        appLogger.append(
+            level = "DEBUG",
+            category = "network",
+            message = "--> WS /ws/chat",
+            details = encodedPayload,
+        )
+        activeSession.send(Frame.Text(encodedPayload))
     }
 
     private suspend fun observeIncoming(
@@ -113,8 +130,8 @@ class KtorChatSocketClient(
                 val payload = frame.readText()
                 appLogger.append(
                     level = "DEBUG",
-                    category = "chat",
-                    message = "<-- WS",
+                    category = "network",
+                    message = "<-- WS /ws/chat",
                     details = payload,
                 )
                 parseMessage(payload)?.let { message ->
@@ -125,8 +142,8 @@ class KtorChatSocketClient(
             if (error is CancellationException) throw error
             appLogger.append(
                 level = "ERROR",
-                category = "chat",
-                message = "Websocket failure",
+                category = "network",
+                message = "<-- WS ERROR /ws/chat",
                 details = error.message ?: error::class.simpleName,
             )
             eventFlow.emit(
