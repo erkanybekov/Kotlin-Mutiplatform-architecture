@@ -11,9 +11,9 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.request
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.util.AttributeKey
-import kotlinx.serialization.json.Json
 
 expect fun createPlatformHttpClient(appLogger: AppLogger): HttpClient
 
@@ -21,11 +21,11 @@ internal fun HttpClientConfig<*>.configureSharedHttpClient(
     appLogger: AppLogger,
 ) {
     install(ContentNegotiation) {
-        json(
-            Json {
-                ignoreUnknownKeys = true
-            },
-        )
+        json(AppJson)
+    }
+
+    install(WebSockets) {
+        pingIntervalMillis = 20_000
     }
 
     install(InAppHttpLoggingPlugin(appLogger))
