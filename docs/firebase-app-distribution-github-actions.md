@@ -96,7 +96,7 @@ For your current use case, only these secrets are required:
 Example value:
 
 ```text
-kanybekov668@gmail.com
+someoneelse@gmail.com
 ```
 
 ## Artifacts produced by the workflow
