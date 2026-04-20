@@ -9,7 +9,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ExpenseDashboardView(appGraph: appGraph)
+        ChatAppView(appGraph: appGraph)
     }
 }
 

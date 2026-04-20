@@ -1,46 +1,6 @@
 import SwiftUI
 import shared
 
-enum ExpenseEntryKind: String, CaseIterable, Identifiable {
-    case expense = "Expense"
-    case income = "Income"
-
-    var id: String { rawValue }
-    var isIncome: Bool { self == .income }
-}
-
-enum ExpenseDashboardPeriod: String, CaseIterable, Identifiable {
-    case week = "Week"
-    case month = "Month"
-    case year = "Year"
-
-    var id: String { rawValue }
-
-    init(label: String) {
-        switch label {
-        case Self.week.rawValue:
-            self = .week
-        case Self.year.rawValue:
-            self = .year
-        default:
-            self = .month
-        }
-    }
-}
-
-enum ExpenseDashboardViewIntent {
-    case load
-    case dismissError
-    case titleChanged(String)
-    case amountChanged(String)
-    case noteChanged(String)
-    case entryTypeChanged(ExpenseEntryKind)
-    case categorySelected(String)
-    case periodSelected(ExpenseDashboardPeriod)
-    case submitEntry
-    case deleteEntry(Int64)
-}
-
 struct SummaryCardModel: Identifiable, Equatable {
     let id: String
     let title: String
@@ -55,12 +15,6 @@ struct CategoryCardModel: Identifiable, Equatable {
     let amountLabel: String
     let shareLabel: String
     let progress: Double
-    let accentHex: String
-}
-
-struct CategoryOptionModel: Identifiable, Equatable {
-    let id: String
-    let name: String
     let accentHex: String
 }
 
@@ -81,71 +35,99 @@ struct TransactionRowModel: Identifiable, Equatable {
     let isIncome: Bool
 }
 
-struct ExpenseEntryDraftViewState: Equatable {
-    let title: String
-    let amount: String
-    let note: String
-    let entryType: ExpenseEntryKind
-    let selectedCategory: String
-    let titleError: String?
-    let amountError: String?
-    let categoryError: String?
+enum ChatAuthModeView: String, CaseIterable, Identifiable {
+    case signIn = "Sign in"
+    case createAccount = "Create account"
 
-    static let empty = ExpenseEntryDraftViewState(
-        title: "",
-        amount: "",
-        note: "",
-        entryType: .expense,
-        selectedCategory: "",
-        titleError: nil,
-        amountError: nil,
-        categoryError: nil
-    )
+    var id: String { rawValue }
 }
 
-struct ExpenseDashboardViewState: Equatable {
-    let isLoading: Bool
-    let isSaving: Bool
-    let balanceLabel: String
-    let incomeLabel: String
-    let expenseLabel: String
-    let selectedPeriod: ExpenseDashboardPeriod
-    let summaryCards: [SummaryCardModel]
-    let availableCategories: [CategoryOptionModel]
-    let chartPoints: [ChartPointModel]
-    let categories: [CategoryCardModel]
-    let recentTransactions: [TransactionRowModel]
-    let isEmpty: Bool
-    let errorMessage: String?
-    let draft: ExpenseEntryDraftViewState
+enum ChatConnectionViewState: String {
+    case connected = "Live"
+    case connecting = "Connecting"
+    case disconnected = "Offline"
+}
 
-    static let empty = ExpenseDashboardViewState(
-        isLoading: false,
-        isSaving: false,
-        balanceLabel: "$0.00",
-        incomeLabel: "$0.00",
-        expenseLabel: "$0.00",
-        selectedPeriod: .month,
-        summaryCards: [],
-        availableCategories: [],
-        chartPoints: [],
-        categories: [],
-        recentTransactions: [],
-        isEmpty: true,
-        errorMessage: nil,
-        draft: .empty
+struct ChatRoomCardModel: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let preview: String
+    let activityLabel: String
+    let memberCountLabel: String
+    let isSelected: Bool
+}
+
+struct ChatMessageModel: Identifiable, Equatable {
+    let id: String
+    let clientMessageId: String
+    let senderLabel: String
+    let body: String
+    let timeLabel: String
+    let isMine: Bool
+    let deliveryLabel: String?
+}
+
+struct ChatRootViewState: Equatable {
+    let authMode: ChatAuthModeView
+    let displayName: String
+    let email: String
+    let password: String
+    let displayNameError: String?
+    let emailError: String?
+    let passwordError: String?
+    let isAuthenticating: Bool
+    let isAuthenticated: Bool
+    let currentUserDisplayName: String
+    let currentUserEmail: String
+    let rooms: [ChatRoomCardModel]
+    let selectedRoomId: String?
+    let selectedRoomName: String?
+    let messages: [ChatMessageModel]
+    let newRoomName: String
+    let newRoomNameError: String?
+    let composerText: String
+    let isLoadingRooms: Bool
+    let isLoadingMessages: Bool
+    let isCreatingRoom: Bool
+    let connectionState: ChatConnectionViewState
+    let errorMessage: String?
+
+    static let empty = ChatRootViewState(
+        authMode: .signIn,
+        displayName: "",
+        email: "",
+        password: "",
+        displayNameError: nil,
+        emailError: nil,
+        passwordError: nil,
+        isAuthenticating: false,
+        isAuthenticated: false,
+        currentUserDisplayName: "",
+        currentUserEmail: "",
+        rooms: [],
+        selectedRoomId: nil,
+        selectedRoomName: nil,
+        messages: [],
+        newRoomName: "",
+        newRoomNameError: nil,
+        composerText: "",
+        isLoadingRooms: false,
+        isLoadingMessages: false,
+        isCreatingRoom: false,
+        connectionState: .disconnected,
+        errorMessage: nil
     )
 }
 
 @MainActor
-final class ExpenseDashboardViewModel: ObservableObject {
-    @Published private(set) var viewState = ExpenseDashboardViewState.empty
+final class ChatAppViewModel: ObservableObject {
+    @Published private(set) var viewState = ChatRootViewState.empty
 
-    private let stateHolder: ExpenseDashboardStateHolder
+    private let stateHolder: ChatAppStateHolder
     private var observationHandle: ObservationHandle?
 
     init(appGraph: SharedAppGraph) {
-        stateHolder = appGraph.expenseDashboardStateHolder()
+        stateHolder = appGraph.chatAppStateHolder()
         sync(with: stateHolder.currentState)
         observationHandle = stateHolder.watch { [weak self] state in
             DispatchQueue.main.async {
@@ -154,107 +136,135 @@ final class ExpenseDashboardViewModel: ObservableObject {
         }
     }
 
-    func send(_ intent: ExpenseDashboardViewIntent) {
-        switch intent {
-        case .load:
-            stateHolder.load()
-        case .dismissError:
-            stateHolder.clearError()
-        case .titleChanged(let value):
-            stateHolder.updateTitle(value: value)
-        case .amountChanged(let value):
-            stateHolder.updateAmount(value: value)
-        case .noteChanged(let value):
-            stateHolder.updateNote(value: value)
-        case .entryTypeChanged(let kind):
-            stateHolder.updateEntryType(isIncome: kind.isIncome)
-        case .categorySelected(let category):
-            stateHolder.selectCategory(category: category)
-        case .periodSelected(let period):
-            switch period {
-            case .week:
-                stateHolder.selectWeek()
-            case .month:
-                stateHolder.selectMonth()
-            case .year:
-                stateHolder.selectYear()
-            }
-        case .submitEntry:
-            stateHolder.submitEntry()
-        case .deleteEntry(let id):
-            stateHolder.deleteEntry(id: id)
+    func load() {
+        stateHolder.load()
+    }
+
+    func switchAuthMode(_ mode: ChatAuthModeView) {
+        switch mode {
+        case .signIn:
+            stateHolder.switchAuthMode(mode: ChatAuthMode.login)
+        case .createAccount:
+            stateHolder.switchAuthMode(mode: ChatAuthMode.signup)
         }
+    }
+
+    func updateDisplayName(_ value: String) {
+        stateHolder.updateDisplayName(value: value)
+    }
+
+    func updateEmail(_ value: String) {
+        stateHolder.updateEmail(value: value)
+    }
+
+    func updatePassword(_ value: String) {
+        stateHolder.updatePassword(value: value)
+    }
+
+    func authenticate() {
+        stateHolder.authenticate()
+    }
+
+    func dismissError() {
+        stateHolder.dismissError()
+    }
+
+    func logout() {
+        stateHolder.logout()
+    }
+
+    func updateNewRoomName(_ value: String) {
+        stateHolder.updateNewRoomName(value: value)
+    }
+
+    func createRoom() {
+        stateHolder.createRoom()
+    }
+
+    func selectRoom(_ roomId: String) {
+        stateHolder.selectRoom(roomId: roomId)
+    }
+
+    func updateComposerText(_ value: String) {
+        stateHolder.updateComposerText(value: value)
+    }
+
+    func sendMessage() {
+        stateHolder.sendMessage()
     }
 
     deinit {
         observationHandle?.dispose()
     }
 
-    private func sync(with state: ExpenseDashboardUiState) {
-        viewState = ExpenseDashboardViewState(
-            isLoading: state.isLoading,
-            isSaving: state.isSaving,
-            balanceLabel: state.balanceLabel,
-            incomeLabel: state.incomeLabel,
-            expenseLabel: state.expenseLabel,
-            selectedPeriod: ExpenseDashboardPeriod(label: state.selectedPeriodLabel),
-            summaryCards: state.summaryCards.map { card in
-                SummaryCardModel(
-                    id: card.title,
-                    title: card.title,
-                    amountLabel: card.amountLabel,
-                    caption: card.caption,
-                    accentHex: card.accentHex
+    private func sync(with state: ChatAppUiState) {
+        viewState = ChatRootViewState(
+            authMode: ChatAuthModeView(kotlinMode: state.authMode),
+            displayName: state.displayName,
+            email: state.email,
+            password: state.password,
+            displayNameError: state.displayNameError,
+            emailError: state.emailError,
+            passwordError: state.passwordError,
+            isAuthenticating: state.isAuthenticating,
+            isAuthenticated: state.isAuthenticated,
+            currentUserDisplayName: state.currentUserDisplayName,
+            currentUserEmail: state.currentUserEmail,
+            rooms: state.rooms.map { room in
+                ChatRoomCardModel(
+                    id: room.id,
+                    name: room.name,
+                    preview: room.preview,
+                    activityLabel: room.activityLabel,
+                    memberCountLabel: room.memberCountLabel,
+                    isSelected: room.isSelected
                 )
             },
-            availableCategories: state.availableCategories.map { category in
-                CategoryOptionModel(
-                    id: category.name,
-                    name: category.name,
-                    accentHex: category.accentHex
+            selectedRoomId: state.selectedRoomId,
+            selectedRoomName: state.selectedRoomName,
+            messages: state.messages.map { message in
+                ChatMessageModel(
+                    id: message.id,
+                    clientMessageId: message.clientMessageId,
+                    senderLabel: message.senderLabel,
+                    body: message.body,
+                    timeLabel: message.timeLabel,
+                    isMine: message.isMine,
+                    deliveryLabel: message.deliveryLabel
                 )
             },
-            chartPoints: state.chartPoints.map { point in
-                ChartPointModel(
-                    id: point.label,
-                    label: point.label,
-                    amount: point.amount
-                )
-            },
-            categories: state.categories.map { category in
-                CategoryCardModel(
-                    id: category.name,
-                    name: category.name,
-                    amountLabel: category.amountLabel,
-                    shareLabel: category.shareLabel,
-                    progress: Double(category.progress),
-                    accentHex: category.accentHex
-                )
-            },
-            recentTransactions: state.recentTransactions.map { transaction in
-                TransactionRowModel(
-                    id: transaction.id,
-                    title: transaction.title,
-                    subtitle: transaction.subtitle,
-                    dateLabel: transaction.dateLabel,
-                    category: transaction.category,
-                    amountLabel: transaction.amountLabel,
-                    accentHex: transaction.accentHex,
-                    isIncome: transaction.isIncome
-                )
-            },
-            isEmpty: state.isEmpty,
-            errorMessage: state.errorMessage,
-            draft: ExpenseEntryDraftViewState(
-                title: state.entryDraft.title,
-                amount: state.entryDraft.amount,
-                note: state.entryDraft.note,
-                entryType: state.entryDraft.isIncome ? .income : .expense,
-                selectedCategory: state.entryDraft.selectedCategory,
-                titleError: state.entryDraft.titleError,
-                amountError: state.entryDraft.amountError,
-                categoryError: state.entryDraft.categoryError
-            )
+            newRoomName: state.newRoomName,
+            newRoomNameError: state.newRoomNameError,
+            composerText: state.composerText,
+            isLoadingRooms: state.isLoadingRooms,
+            isLoadingMessages: state.isLoadingMessages,
+            isCreatingRoom: state.isCreatingRoom,
+            connectionState: ChatConnectionViewState(kotlinState: state.connectionState),
+            errorMessage: state.errorMessage
         )
+    }
+}
+
+private extension ChatAuthModeView {
+    init(kotlinMode: ChatAuthMode) {
+        switch kotlinMode {
+        case ChatAuthMode.signup:
+            self = .createAccount
+        default:
+            self = .signIn
+        }
+    }
+}
+
+private extension ChatConnectionViewState {
+    init(kotlinState: ChatConnectionUiState) {
+        switch kotlinState {
+        case ChatConnectionUiState.connected:
+            self = .connected
+        case ChatConnectionUiState.connecting:
+            self = .connecting
+        default:
+            self = .disconnected
+        }
     }
 }

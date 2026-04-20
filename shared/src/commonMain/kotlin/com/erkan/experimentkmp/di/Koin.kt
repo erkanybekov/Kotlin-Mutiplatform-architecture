@@ -1,6 +1,11 @@
 package com.erkan.experimentkmp.di
 
 import com.erkan.experimentkmp.data.local.db.expenseDatabaseModule
+import com.erkan.experimentkmp.data.auth.AuthSessionManager
+import com.erkan.experimentkmp.data.remote.AuthApi
+import com.erkan.experimentkmp.data.remote.ChatApi
+import com.erkan.experimentkmp.data.remote.ChatSocketClient
+import com.erkan.experimentkmp.data.remote.KtorChatSocketClient
 import com.erkan.experimentkmp.data.repository.RoomExpensesRepository
 import com.erkan.experimentkmp.domain.repository.ExpensesRepository
 import com.erkan.experimentkmp.domain.usecase.AddExpenseEntryUseCase
@@ -13,8 +18,8 @@ import com.erkan.experimentkmp.logging.InMemoryAppLogger
 import com.erkan.experimentkmp.network.createPlatformHttpClient
 import com.erkan.experimentkmp.platform.Platform
 import com.erkan.experimentkmp.platform.getPlatform
+import com.erkan.experimentkmp.presentation.chat.ChatAppStateHolder
 import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
-import com.erkan.experimentkmp.presentation.logs.LogsStateHolder
 import io.ktor.client.HttpClient
 import org.koin.core.Koin
 import org.koin.core.context.startKoin
@@ -29,18 +34,23 @@ fun sharedModules(
     platformProvider: () -> Platform = ::getPlatform,
 ): List<Module> = listOf(
     module {
-    single<Platform> { platformProvider() }
-    single<AppLogger> { InMemoryAppLogger() }
-    single<HttpClient> { createPlatformHttpClient(get()) }
-    single<ExpensesRepository> { RoomExpensesRepository(get()) }
-    single { GetExpenseDashboardUseCase(get()) }
-    single { GetExpenseCategoriesUseCase(get()) }
-    single { GetRecentTransactionsUseCase(get()) }
-    single { AddExpenseEntryUseCase(get()) }
-    single { DeleteExpenseEntryUseCase(get()) }
-    single { LogsStateHolder(get()) }
-    single { ExpenseDashboardStateHolder(get(), get(), get(), get(), get()) }
+        single<Platform> { platformProvider() }
+        single<AppLogger> { InMemoryAppLogger() }
+        single<HttpClient> { createPlatformHttpClient(get()) }
+        single { AuthApi(get()) }
+        single { AuthSessionManager(get(), get()) }
+        single { ChatApi(get()) }
+        single<ChatSocketClient> { KtorChatSocketClient(get(), get()) }
+        single<ExpensesRepository> { RoomExpensesRepository(get()) }
+        single { GetExpenseDashboardUseCase(get()) }
+        single { GetExpenseCategoriesUseCase(get()) }
+        single { GetRecentTransactionsUseCase(get()) }
+        single { AddExpenseEntryUseCase(get()) }
+        single { DeleteExpenseEntryUseCase(get()) }
+        single { ChatAppStateHolder(get(), get(), get(), get(), get()) }
+        single { ExpenseDashboardStateHolder(get(), get(), get(), get(), get()) }
     },
+    platformSessionModule(),
     expenseDatabaseModule(storageDirectoryPath),
 )
 
@@ -64,5 +74,5 @@ class SharedAppGraph private constructor(
     )
 
     fun expenseDashboardStateHolder(): ExpenseDashboardStateHolder = koin.get()
-    fun logsStateHolder(): LogsStateHolder = koin.get()
+    fun chatAppStateHolder(): ChatAppStateHolder = koin.get()
 }

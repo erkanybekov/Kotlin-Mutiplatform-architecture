@@ -11,14 +11,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.erkan.experimentkmp.android.dashboard.ExpenseDashboardScreen
-import com.erkan.experimentkmp.presentation.dashboard.ExpenseDashboardStateHolder
+import com.erkan.experimentkmp.android.chat.ChatAppScreen
+import com.erkan.experimentkmp.presentation.chat.ChatAppStateHolder
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
-    private val dashboardStateHolder: ExpenseDashboardStateHolder by inject()
-    private val dashboardViewModel: ExpenseDashboardViewModel by viewModels {
-        ExpenseDashboardViewModelFactory(dashboardStateHolder)
+    private val chatAppStateHolder: ChatAppStateHolder by inject()
+    private val chatAppViewModel: ChatAppViewModel by viewModels {
+        ChatAppViewModelFactory(chatAppStateHolder)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    ExpenseDashboardRoute(dashboardViewModel)
+                    ChatAppRoute(chatAppViewModel)
                 }
             }
         }
@@ -37,8 +37,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ExpenseDashboardRoute(
-    viewModel: ExpenseDashboardViewModel,
+private fun ChatAppRoute(
+    viewModel: ChatAppViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycleAwareness()
 
@@ -46,8 +46,8 @@ private fun ExpenseDashboardRoute(
         viewModel.load()
     }
 
-    ExpenseDashboardScreen(
+    ChatAppScreen(
         state = state,
-        onIntent = viewModel::onIntent,
+        viewModel = viewModel,
     )
 }
