@@ -14,7 +14,7 @@ on:
       - gradlew.bat
   push:
     branches:
-      - experiment
+      - master
     paths:
       - .github/workflows/firebase-app-distribution.yml
       - androidApp/**
