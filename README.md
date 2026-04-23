@@ -31,6 +31,7 @@ That chat flow includes:
 - session restore and token refresh
 - chat room listing and room creation
 - real-time messaging over WebSocket
+- message deletion with realtime client sync
 
 The repository also contains an expense dashboard module with:
 

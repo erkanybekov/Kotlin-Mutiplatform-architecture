@@ -35,7 +35,7 @@ data class ChatMessageResponseDto(
     val id: String,
     val roomId: String,
     val senderUserId: String,
-    val clientMessageId: String,
+    val clientMessageId: String = "",
     val content: String,
     val createdAt: String? = null,
     val updatedAt: String? = null,

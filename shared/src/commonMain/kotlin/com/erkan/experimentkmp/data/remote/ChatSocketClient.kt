@@ -1,6 +1,7 @@
 package com.erkan.experimentkmp.data.remote
 
 import com.erkan.experimentkmp.domain.model.ChatMessage
+import com.erkan.experimentkmp.domain.model.ChatMessageDeleted
 import kotlinx.coroutines.flow.Flow
 
 enum class ChatSocketStatus {
@@ -16,6 +17,10 @@ sealed interface ChatSocketEvent {
 
     data class MessageReceived(
         val message: ChatMessage,
+    ) : ChatSocketEvent
+
+    data class MessageDeleted(
+        val deletion: ChatMessageDeleted,
     ) : ChatSocketEvent
 
     data class Failure(

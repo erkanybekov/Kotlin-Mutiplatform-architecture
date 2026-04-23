@@ -9,6 +9,7 @@ import com.erkan.experimentkmp.domain.model.ChatRoom
 import com.erkan.experimentkmp.network.ExperimentKsApiConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -52,6 +53,16 @@ class ChatApi(
         parameter("page", page)
         parameter("size", size)
     }.body<ChatMessagesPageResponseDto>().items.map { it.toDomain() }
+
+    suspend fun deleteMessage(
+        accessToken: String,
+        roomId: String,
+        messageId: String,
+    ) {
+        httpClient.delete("${ExperimentKsApiConfig.BaseUrl}/api/v1/chat/rooms/$roomId/messages/$messageId") {
+            bearer(accessToken)
+        }
+    }
 
     private fun io.ktor.client.request.HttpRequestBuilder.bearer(accessToken: String) {
         header(HttpHeaders.Authorization, "Bearer $accessToken")

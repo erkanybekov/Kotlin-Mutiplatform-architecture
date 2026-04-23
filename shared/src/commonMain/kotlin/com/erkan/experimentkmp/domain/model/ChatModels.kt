@@ -21,3 +21,8 @@ data class ChatMessage(
     val createdAt: String?,
     val updatedAt: String?,
 )
+
+data class ChatMessageDeleted(
+    val roomId: String,
+    val messageId: String,
+)

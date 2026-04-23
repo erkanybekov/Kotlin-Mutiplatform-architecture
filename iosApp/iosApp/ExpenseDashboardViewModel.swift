@@ -193,6 +193,10 @@ final class ChatAppViewModel: ObservableObject {
         stateHolder.sendMessage()
     }
 
+    func deleteMessage(_ messageId: String) {
+        stateHolder.deleteMessage(messageId: messageId)
+    }
+
     deinit {
         observationHandle?.dispose()
     }

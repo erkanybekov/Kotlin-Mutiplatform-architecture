@@ -37,6 +37,8 @@ class ChatAppViewModel(
     fun updateComposerText(value: String) = stateHolder.updateComposerText(value)
 
     fun sendMessage() = stateHolder.sendMessage()
+
+    fun deleteMessage(messageId: String) = stateHolder.deleteMessage(messageId)
 }
 
 class ChatAppViewModelFactory(

@@ -257,7 +257,10 @@ struct ChatAppView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(state.messages) { message in
-                                ChatMessageBubble(message: message)
+                                ChatMessageBubble(
+                                    message: message,
+                                    onDelete: viewModel.deleteMessage
+                                )
                                     .id(message.id)
                             }
                         }
@@ -323,6 +326,7 @@ struct ChatAppView: View {
 
 private struct ChatMessageBubble: View {
     let message: ChatMessageModel
+    let onDelete: (String) -> Void
 
     var body: some View {
         HStack {
@@ -350,6 +354,16 @@ private struct ChatMessageBubble: View {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(message.isMine ? ExpensePalette.accentIndigo.opacity(0.18) : ExpensePalette.surfaceInset)
                 )
+
+                if message.isMine && message.deliveryLabel == nil {
+                    Button(role: .destructive) {
+                        onDelete(message.id)
+                    } label: {
+                        Text("Delete")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             if !message.isMine { Spacer(minLength: 48) }

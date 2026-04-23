@@ -9,6 +9,7 @@ import com.erkan.experimentkmp.data.remote.ChatSocketEvent
 import com.erkan.experimentkmp.data.remote.ChatSocketStatus
 import com.erkan.experimentkmp.domain.model.AuthenticatedUserSession
 import com.erkan.experimentkmp.domain.model.ChatMessage
+import com.erkan.experimentkmp.domain.model.ChatMessageDeleted
 import com.erkan.experimentkmp.domain.model.ChatRoom
 import com.erkan.experimentkmp.logging.AppLogger
 import com.erkan.experimentkmp.platform.randomUuidString
@@ -415,6 +416,48 @@ class ChatAppStateHolder(
         }
     }
 
+    fun deleteMessage(messageId: String) {
+        session ?: return
+        val roomId = state.value.selectedRoomId ?: return
+        val targetMessage = state.value.messages.firstOrNull { message ->
+            message.id == messageId
+        } ?: return
+
+        if (!targetMessage.canBeDeleted()) return
+
+        setMessageDeleting(
+            messageId = messageId,
+            isDeleting = true,
+        )
+
+        scope.launch {
+            try {
+                authSessionManager.withFreshAccessToken { accessToken ->
+                    chatApi.deleteMessage(
+                        accessToken = accessToken,
+                        roomId = roomId,
+                        messageId = messageId,
+                    )
+                }
+                applyMessageDeletion(
+                    roomId = roomId,
+                    messageId = messageId,
+                )
+            } catch (error: Throwable) {
+                if (handleAuthenticationFailure(error)) return@launch
+                setMessageDeleting(
+                    messageId = messageId,
+                    isDeleting = false,
+                )
+                _state.update { current ->
+                    current.copy(
+                        errorMessage = error.message ?: "Could not delete message.",
+                    )
+                }
+            }
+        }
+    }
+
     fun watch(block: (ChatAppUiState) -> Unit): ObservationHandle {
         block(state.value)
         val job: Job = scope.launch {
@@ -543,6 +586,8 @@ class ChatAppStateHolder(
 
             is ChatSocketEvent.MessageReceived -> handleIncomingMessage(event.message)
 
+            is ChatSocketEvent.MessageDeleted -> handleDeletedMessage(event.deletion)
+
             is ChatSocketEvent.Failure -> {
                 _state.update { current ->
                     current.copy(errorMessage = event.reason)
@@ -563,22 +608,22 @@ class ChatAppStateHolder(
             if (current.selectedRoomId != message.roomId) {
                 current.copy(rooms = updatedRooms)
             } else {
-                val uiMessage = message.toUi(authenticatedSession.user.id)
-                val existingIndex = current.messages.indexOfFirst { item ->
-                    item.id == message.id || item.clientMessageId == message.clientMessageId
-                }
-                val updatedMessages = current.messages.toMutableList()
-                if (existingIndex >= 0) {
-                    updatedMessages[existingIndex] = uiMessage
-                } else {
-                    updatedMessages += uiMessage
-                }
                 current.copy(
                     rooms = updatedRooms,
-                    messages = updatedMessages.sortedBy { it.sortKey },
+                    messages = current.messages.mergeIncomingMessage(
+                        incomingMessage = message,
+                        currentUserId = authenticatedSession.user.id,
+                    ),
                 )
             }
         }
+    }
+
+    private fun handleDeletedMessage(deletion: ChatMessageDeleted) {
+        applyMessageDeletion(
+            roomId = deletion.roomId,
+            messageId = deletion.messageId,
+        )
     }
 
     private fun updateMessageDelivery(
@@ -595,6 +640,55 @@ class ChatAppStateHolder(
                     }
                 },
             )
+        }
+    }
+
+    private fun setMessageDeleting(
+        messageId: String,
+        isDeleting: Boolean,
+    ) {
+        _state.update { current ->
+            current.copy(
+                messages = current.messages.map { message ->
+                    if (message.id == messageId) {
+                        message.copy(
+                            deliveryLabel = if (isDeleting) "Deleting" else null,
+                        )
+                    } else {
+                        message
+                    }
+                },
+                errorMessage = null,
+            )
+        }
+    }
+
+    private fun applyMessageDeletion(
+        roomId: String,
+        messageId: String,
+    ) {
+        var shouldRefreshRooms = false
+        _state.update { current ->
+            val result = applyDeletedMessageToUi(
+                rooms = current.rooms,
+                selectedRoomId = current.selectedRoomId,
+                messages = current.messages,
+                roomId = roomId,
+                messageId = messageId,
+            )
+            shouldRefreshRooms = result.shouldRefreshRooms
+
+            if (result.rooms == current.rooms && result.messages == current.messages) {
+                return@update current
+            }
+            current.copy(
+                messages = result.messages,
+                rooms = result.rooms,
+            )
+        }
+
+        if (shouldRefreshRooms) {
+            refreshRooms()
         }
     }
 }
@@ -639,6 +733,100 @@ private fun ChatRoom.sortKey(): String = lastActivityAt ?: updatedAt ?: createdA
 
 private fun ChatMessage.sortKey(): String = createdAt ?: updatedAt ?: ""
 
+internal fun List<ChatMessageItemUi>.mergeIncomingMessage(
+    incomingMessage: ChatMessage,
+    currentUserId: String,
+): List<ChatMessageItemUi> {
+    val uiMessage = incomingMessage.toUi(currentUserId)
+    val existingIndex = indexOfFirst { item ->
+        item.id == incomingMessage.id || (
+            incomingMessage.clientMessageId.isNotBlank() &&
+                item.clientMessageId == incomingMessage.clientMessageId
+            )
+    }
+    val pendingIndex = findPendingEchoMatchIndex(uiMessage)
+    val updatedMessages = toMutableList()
+    when {
+        existingIndex >= 0 -> {
+            updatedMessages[existingIndex] = uiMessage
+            if (pendingIndex >= 0 && pendingIndex != existingIndex) {
+                updatedMessages.removeAt(pendingIndex)
+            }
+        }
+
+        pendingIndex >= 0 -> {
+            updatedMessages[pendingIndex] = uiMessage
+        }
+
+        else -> {
+            updatedMessages += uiMessage
+        }
+    }
+    return updatedMessages.sortedBy { it.sortKey }
+}
+
+private fun List<ChatMessageItemUi>.findPendingEchoMatchIndex(
+    incomingMessage: ChatMessageItemUi,
+): Int {
+    if (!incomingMessage.isMine) return -1
+
+    return indexOfLast { message ->
+        message.isPendingEchoCandidateFor(incomingMessage)
+    }
+}
+
+private fun ChatMessageItemUi.isPendingEchoCandidateFor(
+    incomingMessage: ChatMessageItemUi,
+): Boolean {
+    if (deliveryLabel == null || !isMine || !incomingMessage.isMine) return false
+    if (body != incomingMessage.body) return false
+    return true
+}
+
+private fun ChatMessageItemUi.canBeDeleted(): Boolean = isMine && deliveryLabel == null
+
+internal data class ChatMessageDeletionUiResult(
+    val rooms: List<ChatRoomItemUi>,
+    val messages: List<ChatMessageItemUi>,
+    val shouldRefreshRooms: Boolean,
+)
+
+internal fun applyDeletedMessageToUi(
+    rooms: List<ChatRoomItemUi>,
+    selectedRoomId: String?,
+    messages: List<ChatMessageItemUi>,
+    roomId: String,
+    messageId: String,
+): ChatMessageDeletionUiResult {
+    if (selectedRoomId != roomId) {
+        return ChatMessageDeletionUiResult(
+            rooms = rooms,
+            messages = messages,
+            shouldRefreshRooms = true,
+        )
+    }
+
+    val updatedMessages = messages.filterNot { message ->
+        message.id == messageId
+    }
+    if (updatedMessages.size == messages.size) {
+        return ChatMessageDeletionUiResult(
+            rooms = rooms,
+            messages = messages,
+            shouldRefreshRooms = false,
+        )
+    }
+
+    return ChatMessageDeletionUiResult(
+        rooms = rooms.updatePreviewAfterDeletion(
+            roomId = roomId,
+            latestMessage = updatedMessages.lastOrNull(),
+        ),
+        messages = updatedMessages,
+        shouldRefreshRooms = updatedMessages.isEmpty(),
+    )
+}
+
 private fun List<ChatRoomItemUi>.markSelected(roomId: String): List<ChatRoomItemUi> =
     map { room -> room.copy(isSelected = room.id == roomId) }
 
@@ -652,6 +840,25 @@ private fun List<ChatRoomItemUi>.updatePreview(
             preview = preview,
             activityLabel = formatRoomActivity(sortKey),
             sortKey = sortKey,
+        )
+    } else {
+        room
+    }
+}.sortedByDescending { room -> room.sortKey }
+
+private fun List<ChatRoomItemUi>.updatePreviewAfterDeletion(
+    roomId: String,
+    latestMessage: ChatMessageItemUi?,
+): List<ChatRoomItemUi> = map { room ->
+    if (room.id == roomId) {
+        latestMessage?.let { message ->
+            room.copy(
+                preview = message.body,
+                activityLabel = formatRoomActivity(message.sortKey),
+                sortKey = message.sortKey,
+            )
+        } ?: room.copy(
+            preview = "No messages yet",
         )
     } else {
         room
@@ -674,11 +881,14 @@ private fun formatMessageTime(timestamp: String?): String {
     return "${localDateTime.hour.pad2()}:${localDateTime.minute.pad2()}"
 }
 
-private fun String?.parseLocalDateTimeOrNull() =
+private fun String?.parseInstantOrNull(): Instant? =
     this?.let { raw ->
         runCatching {
-            Instant.parse(raw).toLocalDateTime(TimeZone.currentSystemDefault())
+            Instant.parse(raw)
         }.getOrNull()
     }
+
+private fun String?.parseLocalDateTimeOrNull() =
+    parseInstantOrNull()?.toLocalDateTime(TimeZone.currentSystemDefault())
 
 private fun Int.pad2(): String = toString().padStart(2, '0')

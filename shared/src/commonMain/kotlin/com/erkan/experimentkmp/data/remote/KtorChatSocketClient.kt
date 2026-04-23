@@ -3,6 +3,7 @@ package com.erkan.experimentkmp.data.remote
 import com.erkan.experimentkmp.data.remote.model.ChatMessageResponseDto
 import com.erkan.experimentkmp.data.remote.model.SendChatMessageRequestDto
 import com.erkan.experimentkmp.data.remote.model.toDomain
+import com.erkan.experimentkmp.domain.model.ChatMessageDeleted
 import com.erkan.experimentkmp.logging.AppLogger
 import com.erkan.experimentkmp.network.AppJson
 import com.erkan.experimentkmp.network.ExperimentKsApiConfig
@@ -30,7 +31,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 
 class KtorChatSocketClient(
     private val httpClient: HttpClient,
@@ -134,8 +137,8 @@ class KtorChatSocketClient(
                     message = "<-- WS /ws/chat",
                     details = payload,
                 )
-                parseMessage(payload)?.let { message ->
-                    eventFlow.emit(ChatSocketEvent.MessageReceived(message))
+                parseEvent(payload)?.let { event ->
+                    eventFlow.emit(event)
                 }
             }
         } catch (error: Throwable) {
@@ -162,11 +165,19 @@ class KtorChatSocketClient(
         }
     }
 
-    private fun parseMessage(payload: String): com.erkan.experimentkmp.domain.model.ChatMessage? {
+    private fun parseEvent(payload: String): ChatSocketEvent? {
         return runCatching {
             val element = AppJson.parseToJsonElement(payload)
-            val messageObject = element.findMessageObject() ?: return null
-            AppJson.decodeFromJsonElement<ChatMessageResponseDto>(messageObject).toDomain()
+            val messageObject = element.findMessageObject()
+            if (messageObject != null) {
+                ChatSocketEvent.MessageReceived(
+                    AppJson.decodeFromJsonElement<ChatMessageResponseDto>(messageObject).toDomain(),
+                )
+            } else {
+                element.findDeletedMessage()?.let { deletion ->
+                    ChatSocketEvent.MessageDeleted(deletion)
+                }
+            }
         }.getOrNull()
     }
 }
@@ -192,4 +203,48 @@ private fun JsonObject.looksLikeChatMessage(): Boolean {
     val roomId = this["roomId"]
     val senderUserId = this["senderUserId"]
     return content != null && roomId != null && senderUserId != null
+}
+
+private fun JsonElement.findDeletedMessage(): ChatMessageDeleted? = when (this) {
+    is JsonObject -> when {
+        eventName().isMessageDeletedEventName() -> {
+            eventPayloadObject()?.toDeletedMessage()
+                ?: toDeletedMessage()
+        }
+
+        else -> listOf("payload", "data", "message")
+            .asSequence()
+            .mapNotNull { key -> this[key]?.findDeletedMessage() }
+            .firstOrNull()
+    }
+
+    is JsonArray -> asSequence()
+        .mapNotNull { item -> item.findDeletedMessage() }
+        .firstOrNull()
+
+    else -> null
+}
+
+private fun JsonObject.eventName(): String? = listOf("event", "type", "action", "name")
+    .asSequence()
+    .mapNotNull { key -> this[key]?.jsonPrimitive?.contentOrNull }
+    .firstOrNull()
+
+private fun String?.isMessageDeletedEventName(): Boolean =
+    this?.lowercase()?.replace('_', '.') == "message.deleted"
+
+private fun JsonObject.eventPayloadObject(): JsonObject? = listOf("payload", "data", "message")
+    .asSequence()
+    .mapNotNull { key -> this[key] as? JsonObject }
+    .firstOrNull()
+
+private fun JsonObject.toDeletedMessage(): ChatMessageDeleted? {
+    val roomId = this["roomId"]?.jsonPrimitive?.contentOrNull ?: return null
+    val messageId = this["messageId"]?.jsonPrimitive?.contentOrNull
+        ?: this["id"]?.jsonPrimitive?.contentOrNull
+        ?: return null
+    return ChatMessageDeleted(
+        roomId = roomId,
+        messageId = messageId,
+    )
 }

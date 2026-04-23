@@ -73,6 +73,7 @@ fun ChatAppScreen(
             onSelectRoom = viewModel::selectRoom,
             onComposerTextChange = viewModel::updateComposerText,
             onSendMessage = viewModel::sendMessage,
+            onDeleteMessage = viewModel::deleteMessage,
         )
     } else {
         ChatAuthScreen(
@@ -239,6 +240,7 @@ private fun ChatConversationScreen(
     onSelectRoom: (String) -> Unit,
     onComposerTextChange: (String) -> Unit,
     onSendMessage: () -> Unit,
+    onDeleteMessage: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
 
@@ -311,6 +313,7 @@ private fun ChatConversationScreen(
             MessagesPane(
                 state = state,
                 listState = listState,
+                onDeleteMessage = onDeleteMessage,
             )
         }
     }
@@ -439,6 +442,7 @@ private fun RoomsRow(
 private fun ColumnScope.MessagesPane(
     state: ChatAppUiState,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    onDeleteMessage: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier
@@ -483,7 +487,10 @@ private fun ColumnScope.MessagesPane(
                         items = state.messages,
                         key = { message -> message.id },
                     ) { message ->
-                        MessageBubble(message)
+                        MessageBubble(
+                            message = message,
+                            onDeleteMessage = onDeleteMessage,
+                        )
                     }
                 }
             }
@@ -534,6 +541,7 @@ private fun ChatComposerBar(
 @Composable
 private fun MessageBubble(
     message: ChatMessageItemUi,
+    onDeleteMessage: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -574,6 +582,19 @@ private fun MessageBubble(
                         text = listOfNotNull(message.timeLabel, message.deliveryLabel).joinToString(" • "),
                         style = MaterialTheme.typography.labelSmall,
                         color = ExpensePalette.TextMuted,
+                    )
+                }
+            }
+
+            if (message.isMine && message.deliveryLabel == null) {
+                TextButton(
+                    onClick = { onDeleteMessage(message.id) },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                ) {
+                    Text(
+                        text = "Delete",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ExpensePalette.Error,
                     )
                 }
             }
