@@ -49,10 +49,13 @@ data class ChatAppUiState(
     val messages: List<ChatMessageItemUi> = emptyList(),
     val newRoomName: String = "",
     val newRoomNameError: String? = null,
+    val inviteMemberEmail: String = "",
+    val inviteMemberEmailError: String? = null,
     val composerText: String = "",
     val isLoadingRooms: Boolean = false,
     val isLoadingMessages: Boolean = false,
     val isCreatingRoom: Boolean = false,
+    val isInvitingMember: Boolean = false,
     val connectionState: ChatConnectionUiState = ChatConnectionUiState.DISCONNECTED,
     val errorMessage: String? = null,
 ) {

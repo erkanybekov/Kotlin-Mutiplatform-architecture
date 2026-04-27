@@ -3,6 +3,7 @@ package com.erkan.experimentkmp.data.remote
 import com.erkan.experimentkmp.data.remote.model.ChatMessagesPageResponseDto
 import com.erkan.experimentkmp.data.remote.model.ChatRoomResponseDto
 import com.erkan.experimentkmp.data.remote.model.CreateChatRoomRequestDto
+import com.erkan.experimentkmp.data.remote.model.InviteChatRoomMemberRequestDto
 import com.erkan.experimentkmp.data.remote.model.toDomain
 import com.erkan.experimentkmp.domain.model.ChatMessage
 import com.erkan.experimentkmp.domain.model.ChatRoom
@@ -42,6 +43,18 @@ class ChatApi(
     ): ChatRoom = httpClient.post("${ExperimentKsApiConfig.BaseUrl}/api/v1/chat/rooms/$roomId/join") {
         bearer(accessToken)
     }.body<ChatRoomResponseDto>().toDomain()
+
+    suspend fun inviteMember(
+        accessToken: String,
+        roomId: String,
+        email: String,
+    ) {
+        httpClient.post("${ExperimentKsApiConfig.BaseUrl}/api/v1/chat/rooms/$roomId/members") {
+            bearer(accessToken)
+            contentType(ContentType.Application.Json)
+            setBody(InviteChatRoomMemberRequestDto(email = email))
+        }
+    }
 
     suspend fun listMessages(
         accessToken: String,

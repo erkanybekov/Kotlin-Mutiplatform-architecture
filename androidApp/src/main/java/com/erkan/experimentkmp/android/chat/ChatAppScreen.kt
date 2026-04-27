@@ -70,6 +70,8 @@ fun ChatAppScreen(
             onLogout = viewModel::logout,
             onNewRoomNameChange = viewModel::updateNewRoomName,
             onCreateRoom = viewModel::createRoom,
+            onInviteMemberEmailChange = viewModel::updateInviteMemberEmail,
+            onInviteMember = viewModel::inviteMember,
             onSelectRoom = viewModel::selectRoom,
             onComposerTextChange = viewModel::updateComposerText,
             onSendMessage = viewModel::sendMessage,
@@ -237,6 +239,8 @@ private fun ChatConversationScreen(
     onLogout: () -> Unit,
     onNewRoomNameChange: (String) -> Unit,
     onCreateRoom: () -> Unit,
+    onInviteMemberEmailChange: (String) -> Unit,
+    onInviteMember: () -> Unit,
     onSelectRoom: (String) -> Unit,
     onComposerTextChange: (String) -> Unit,
     onSendMessage: () -> Unit,
@@ -294,6 +298,8 @@ private fun ChatConversationScreen(
                 state = state,
                 onNewRoomNameChange = onNewRoomNameChange,
                 onCreateRoom = onCreateRoom,
+                onInviteMemberEmailChange = onInviteMemberEmailChange,
+                onInviteMember = onInviteMember,
             )
 
             if (state.rooms.isNotEmpty()) {
@@ -352,6 +358,8 @@ private fun RoomCreationCard(
     state: ChatAppUiState,
     onNewRoomNameChange: (String) -> Unit,
     onCreateRoom: () -> Unit,
+    onInviteMemberEmailChange: (String) -> Unit,
+    onInviteMember: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.elevatedCardColors(
@@ -393,6 +401,42 @@ private fun RoomCreationCard(
                         )
                     } else {
                         Text("Create")
+                    }
+                }
+            }
+
+            Text(
+                text = "Invite member",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.inviteMemberEmail,
+                    onValueChange = onInviteMemberEmailChange,
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Member email") },
+                    enabled = state.selectedRoomId != null,
+                    isError = state.inviteMemberEmailError != null,
+                    supportingText = state.inviteMemberEmailError?.let { error ->
+                        { Text(error, color = MaterialTheme.colorScheme.error) }
+                    },
+                )
+                Button(
+                    onClick = onInviteMember,
+                    enabled = state.selectedRoomId != null && !state.isInvitingMember,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    if (state.isInvitingMember) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("Invite")
                     }
                 }
             }

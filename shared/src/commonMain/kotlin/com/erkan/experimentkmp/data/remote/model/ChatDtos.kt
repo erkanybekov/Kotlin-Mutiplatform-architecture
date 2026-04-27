@@ -10,6 +10,11 @@ data class CreateChatRoomRequestDto(
 )
 
 @Serializable
+data class InviteChatRoomMemberRequestDto(
+    val email: String,
+)
+
+@Serializable
 data class SendChatMessageRequestDto(
     val action: String,
     val roomId: String,

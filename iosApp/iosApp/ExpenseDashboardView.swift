@@ -193,6 +193,35 @@ struct ChatAppView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(state.isCreatingRoom)
             }
+
+            Text("Invite member")
+                .font(.subheadline.weight(.semibold))
+
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("Member email", text: binding(state.inviteMemberEmail, setter: viewModel.updateInviteMemberEmail))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(state.selectedRoomId == nil)
+                    if let error = state.inviteMemberEmailError {
+                        ExpenseValidationMessage(text: error)
+                    }
+                }
+
+                Button {
+                    viewModel.inviteMember()
+                } label: {
+                    if state.isInvitingMember {
+                        ProgressView()
+                    } else {
+                        Text("Invite")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(state.selectedRoomId == nil || state.isInvitingMember)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)

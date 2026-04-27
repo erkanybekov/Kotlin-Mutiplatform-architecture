@@ -32,6 +32,10 @@ class ChatAppViewModel(
 
     fun createRoom() = stateHolder.createRoom()
 
+    fun updateInviteMemberEmail(value: String) = stateHolder.updateInviteMemberEmail(value)
+
+    fun inviteMember() = stateHolder.inviteMember()
+
     fun selectRoom(roomId: String) = stateHolder.selectRoom(roomId)
 
     fun updateComposerText(value: String) = stateHolder.updateComposerText(value)

@@ -121,6 +121,16 @@ class ChatAppStateHolder(
         }
     }
 
+    fun updateInviteMemberEmail(value: String) {
+        _state.update { current ->
+            current.copy(
+                inviteMemberEmail = value,
+                inviteMemberEmailError = null,
+                errorMessage = null,
+            )
+        }
+    }
+
     fun updateComposerText(value: String) {
         _state.update { current ->
             current.copy(
@@ -331,6 +341,62 @@ class ChatAppStateHolder(
                     current.copy(
                         isCreatingRoom = false,
                         errorMessage = error.message ?: "Could not create room.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun inviteMember() {
+        session ?: return
+        val roomId = state.value.selectedRoomId
+        if (roomId.isNullOrBlank()) {
+            _state.update { current ->
+                current.copy(errorMessage = "Select a room before inviting a member.")
+            }
+            return
+        }
+
+        val memberEmail = state.value.inviteMemberEmail.trim().lowercase()
+        if (!memberEmail.contains('@')) {
+            _state.update { current ->
+                current.copy(inviteMemberEmailError = "Enter a valid email address.")
+            }
+            return
+        }
+        if (state.value.isInvitingMember) return
+
+        _state.update { current ->
+            current.copy(
+                inviteMemberEmail = memberEmail,
+                isInvitingMember = true,
+                inviteMemberEmailError = null,
+                errorMessage = null,
+            )
+        }
+
+        scope.launch {
+            try {
+                authSessionManager.withFreshAccessToken { accessToken ->
+                    chatApi.inviteMember(
+                        accessToken = accessToken,
+                        roomId = roomId,
+                        email = memberEmail,
+                    )
+                }
+                _state.update { current ->
+                    current.copy(
+                        isInvitingMember = false,
+                        inviteMemberEmail = "",
+                    )
+                }
+                refreshRooms()
+            } catch (error: Throwable) {
+                if (handleAuthenticationFailure(error)) return@launch
+                _state.update { current ->
+                    current.copy(
+                        isInvitingMember = false,
+                        errorMessage = error.message ?: "Could not invite member.",
                     )
                 }
             }

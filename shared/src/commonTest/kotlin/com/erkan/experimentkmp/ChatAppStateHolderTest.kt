@@ -16,6 +16,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.http.content.OutgoingContent
+import io.ktor.utils.io.core.readText
+import io.ktor.utils.io.readRemaining
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -130,4 +133,43 @@ class ChatAppStateHolderTest {
         assertEquals(HttpMethod.Delete, capturedMethod)
         assertEquals("/api/v1/chat/rooms/room-1/messages/message-2", capturedPath)
     }
+
+    @Test
+    fun inviteMemberUsesRoomMembersEndpointAndEmailBody() = runTest {
+        var capturedMethod: HttpMethod? = null
+        var capturedPath: String? = null
+        var capturedBody: String? = null
+        val chatApi = ChatApi(
+            HttpClient(
+                MockEngine { request ->
+                    capturedMethod = request.method
+                    capturedPath = request.url.encodedPath
+                    capturedBody = request.body.readTextForTest()
+                    respond(
+                        content = "",
+                        status = HttpStatusCode.NoContent,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                },
+            ) {
+                configureSharedHttpClient(InMemoryAppLogger())
+            },
+        )
+
+        chatApi.inviteMember(
+            accessToken = "access-token",
+            roomId = "room-1",
+            email = "teammate@example.com",
+        )
+
+        assertEquals(HttpMethod.Post, capturedMethod)
+        assertEquals("/api/v1/chat/rooms/room-1/members", capturedPath)
+        assertEquals("""{"email":"teammate@example.com"}""", capturedBody)
+    }
+}
+
+private suspend fun OutgoingContent.readTextForTest(): String = when (this) {
+    is OutgoingContent.ByteArrayContent -> bytes().decodeToString()
+    is OutgoingContent.ReadChannelContent -> readFrom().readRemaining().readText()
+    else -> ""
 }

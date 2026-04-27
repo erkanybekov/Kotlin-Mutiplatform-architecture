@@ -85,10 +85,13 @@ struct ChatRootViewState: Equatable {
     let messages: [ChatMessageModel]
     let newRoomName: String
     let newRoomNameError: String?
+    let inviteMemberEmail: String
+    let inviteMemberEmailError: String?
     let composerText: String
     let isLoadingRooms: Bool
     let isLoadingMessages: Bool
     let isCreatingRoom: Bool
+    let isInvitingMember: Bool
     let connectionState: ChatConnectionViewState
     let errorMessage: String?
 
@@ -110,10 +113,13 @@ struct ChatRootViewState: Equatable {
         messages: [],
         newRoomName: "",
         newRoomNameError: nil,
+        inviteMemberEmail: "",
+        inviteMemberEmailError: nil,
         composerText: "",
         isLoadingRooms: false,
         isLoadingMessages: false,
         isCreatingRoom: false,
+        isInvitingMember: false,
         connectionState: .disconnected,
         errorMessage: nil
     )
@@ -181,6 +187,14 @@ final class ChatAppViewModel: ObservableObject {
         stateHolder.createRoom()
     }
 
+    func updateInviteMemberEmail(_ value: String) {
+        stateHolder.updateInviteMemberEmail(value: value)
+    }
+
+    func inviteMember() {
+        stateHolder.inviteMember()
+    }
+
     func selectRoom(_ roomId: String) {
         stateHolder.selectRoom(roomId: roomId)
     }
@@ -239,10 +253,13 @@ final class ChatAppViewModel: ObservableObject {
             },
             newRoomName: state.newRoomName,
             newRoomNameError: state.newRoomNameError,
+            inviteMemberEmail: state.inviteMemberEmail,
+            inviteMemberEmailError: state.inviteMemberEmailError,
             composerText: state.composerText,
             isLoadingRooms: state.isLoadingRooms,
             isLoadingMessages: state.isLoadingMessages,
             isCreatingRoom: state.isCreatingRoom,
+            isInvitingMember: state.isInvitingMember,
             connectionState: ChatConnectionViewState(kotlinState: state.connectionState),
             errorMessage: state.errorMessage
         )
